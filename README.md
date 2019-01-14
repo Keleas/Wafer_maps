@@ -1,7 +1,7 @@
 # Поиск паттернов на wafer maps на примере датасета WM-811K
 <h3 id="Introduction"> Data Introduction </h3>
 
-WM-811K $-$ это наборы данных полупроводников, которые можно загрузить с [Kaggle](https://www.kaggle.com/qingyi/wm811k-wafer-map).
+WM-811K — это наборы данных полупроводников, которые можно загрузить с [Kaggle](https://www.kaggle.com/qingyi/wm811k-wafer-map).
 
 В полупроводниках существует много проблем, связанных с процессом, и шаблон вафельной карты из CP Yield, WAT (Wafer Acceptance Test).
 
