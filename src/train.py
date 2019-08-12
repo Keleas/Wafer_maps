@@ -141,3 +141,7 @@ def plot_errors(model):
     print(f"Top-1 Accuracy: {accuracy_score(pred, labels)}")
     plt.figure(figsize=(12, 10))
     sns.heatmap(confusion_matrix(pred, labels)*(1-np.eye(10)), annot=True)
+
+
+if __name__ == '__main__':
+    main()
