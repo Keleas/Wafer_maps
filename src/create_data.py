@@ -8,7 +8,6 @@ import random
 from tqdm import tqdm
 import gc
 from sklearn.model_selection import train_test_split
-
 from multiprocessing import cpu_count
 from joblib import Parallel, delayed
 
@@ -869,6 +868,11 @@ class TrainingDatabaseCreator(object):
         self.IMAGE_DIMS = (96, 96, 1)
 
     def read_full_data(self, synthesized_path_name=None):
+        """
+
+        :param synthesized_path_name:
+        :return:
+        """
         full_real_database = pd.read_pickle(self.full_database_name)
 
         synthesized_database = None
@@ -880,6 +884,10 @@ class TrainingDatabaseCreator(object):
         return full_real_database, synthesized_database
 
     def make_training_database(self):
+        """
+
+        :return:
+        """
 
         full_real_database, synthesized_database = self.read_full_data()
         synthesized_database['failureType'] = synthesized_database['failureType'].map(lambda label: [[label]])
@@ -888,7 +896,7 @@ class TrainingDatabaseCreator(object):
                                                                             cv2.resize(waf_map,
                                                                                        dsize=(self.IMAGE_DIMS[0],
                                                                                               self.IMAGE_DIMS[1]),
-                                                                                       interpolation=cv2.INTER_NEAREST))
+                                                                                       interpolation=cv2.INTER_CUBIC))
 
         training_database = synthesized_database
         testing_database = None
@@ -914,4 +922,4 @@ class TrainingDatabaseCreator(object):
 
         gc.collect()
 
-        return True
+        return training_database, testing_database
