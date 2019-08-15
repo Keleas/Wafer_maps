@@ -33,7 +33,7 @@ class LeNet(nn.Module):
 
         self.dense_1 = nn.Linear(144 * 100, 500)  # Fully-connected layer, 500 outputs
         # input features = (32/2**(num MaxPool layers))*(num previous output channels)
-        self.dense_2 = nn.Linear(500, 10)
+        self.dense_2 = nn.Linear(500, 8)
 
     def forward(self, x):
         # layer 1
