@@ -11,137 +11,289 @@ import seaborn as sns
 import time
 from sklearn.metrics import confusion_matrix, accuracy_score
 import hiddenlayer as hl
+from sklearn.preprocessing import MultiLabelBinarizer
+import itertools
+from sklearn.metrics import confusion_matrix
+from matplotlib import gridspec
 
 import src.models as models
 import src.create_data as create_data
+from src.logger import Logger
 
-global is_cuda
-is_cuda = torch.cuda.is_available()
 
-def batch_generator(path, batch_size=10):
-    for file_name in os.listdir(path):
-        with open(path+file_name, 'rb') as fo:
-            dict_ = pickle.load(fo, encoding='bytes')
-        label = dict_[b"labels"]
-        data = dict_[b"data"].reshape((-1,3,32,32))
-        if is_cuda:
-            for i in range(0,len(label),batch_size):
-                yield (torch.tensor(data[i:i+batch_size], dtype=torch.float32).cuda(), torch.LongTensor(label[i:i+batch_size]).cuda())
+class TrainModel(object):
+    def __init__(self):
+        self.is_cuda = torch.cuda.is_available()
+        self.model = models.LeNet()
+        if self.is_cuda:
+            self.model = self.model.to("cuda:0")
+        self.image_reshape = (-1, 1, 96, 96)
+        self.logger = Logger('logs/')
+
+        self.train = None
+        self.test = None
+        self.val = None
+        self.mlb = None
+
+    def batch_generator(self, batch_size=10, mode='train'):
+        if mode == 'train':
+            data = self.train
+        elif mode == 'test':
+            data = self.test
+        elif mode == 'val':
+            data = self.val
         else:
-            for i in range(0,len(label),batch_size):
-                yield (torch.tensor(data[i:i+batch_size], dtype=torch.float32), torch.LongTensor(label[i:i+batch_size]))
+            raise Exception('Invalid batch mode')
+        out_map = []
+        out_class = []
+        while True:
+            data = data.sample(frac=1).reset_index(drop=True)
+            for index, row in data.iterrows():
+                out_map += [row.waferMap]
+                out_class += [row.failureNum]
+                if len(out_map) >= batch_size:
+                    out_map = np.array(out_map)
+                    out_map = out_map.reshape(self.image_reshape)
+                    # out_class = self.mlb.transform(out_class)
+                    if self.is_cuda:
+                        yield (torch.tensor(out_map, dtype=torch.float32).cuda(),
+                               torch.LongTensor(out_class).cuda())
+                    else:
+                        yield (torch.tensor(out_map, dtype=torch.float32),
+                               torch.LongTensor(out_class))
+                    out_map = []
+                    out_class = []
 
+    def start_train_model(self, num_epo=10, batch_size=10,
+              weights_file="model.torch", checkpoint_after=10,
+              lr_start=1e-3, lr_deacy_rate=10, drop_lr_after=10):
+        """
+        Traininig the given model
+        """
+        opt = torch.optim.Adam(self.model.parameters(), lr=lr_start)  # Define the optimizer
+        loss_f = nn.CrossEntropyLoss()  # Define loss function used
 
-def test_batch_generator(path, batch_size=10):
-    with open(path + 'test_batch', 'rb') as fo:
-        dict_ = pickle.load(fo, encoding='bytes')
-    label = dict_[b"labels"]
-    data = dict_[b"data"].reshape((-1,3,32,32))
-    if is_cuda:
-        for i in range(0,len(label),batch_size):
-            yield (torch.tensor(data[i:i+batch_size], dtype=torch.float32).cuda(), torch.LongTensor(label[i:i+batch_size]).cuda())
-    else:
-        for i in range(0,len(label),batch_size):
-            yield (torch.tensor(data[i:i+batch_size], dtype=torch.float32), torch.LongTensor(label[i:i+batch_size]))
+        # Service variables
+        losses_train = []  # save training losses
+        losses_val = []  # save validation loasses
+        cur_step = 0  # current iteration
+        steps_per_epoch = 100
+        steps_per_epoch_val = 100
 
+        start = time.time()
+        self.model = self.model.train()
+        for epo in range(num_epo):
+            cum_loss = 0  # Zero the cumulative sum
+            for step in range(steps_per_epoch):
+                x, y = next(self.batch_generator(batch_size=10, mode='train'))
+                out = self.model(x)  # calculate model outputs
+                loss = loss_f(out, y)  # calculate loss
 
-def train(model, training_path, test_path, num_epo=10, batch_size=10,
-          weights_file="model.torch", checkpoint_after=1000,
-          lr_start=1e-3, lr_deacy_rate=10, drop_lr_after=10):
-    """
-    Traininig the given model
-    """
-    opt = torch.optim.Adam(model.parameters(), lr=lr_start)  # Define the optimizer
-    loss_f = nn.CrossEntropyLoss()  # Define loss function used
+                cum_loss += loss.data.cpu().item()  # add current loss to cum_loss
 
-    # Service variables
-    losses_train = []  # save training losses
-    losses_val = []  # save validation loasses
-    i = 0  # current iteration
-    start = time.time()
-    for epo in range(num_epo):
+                opt.zero_grad()  # zero old gradients
+                loss.backward()  # calculate new gradients
+                opt.step()  # perform optimization step
 
-        cum_loss = 0  # Zero the cumulative sum
-        for (x, y) in batch_generator(training_path, batch_size):
-            out = model(x)  # calculate model outputs
-            loss = loss_f(out, y)  # calculate loss
+                cur_step += 1
+                if cur_step % checkpoint_after == 0:
+                    val_loss = 0
+                    # measure loss on validation
+                    for val_step in range(steps_per_epoch_val):
+                        x, y = next(self.batch_generator(batch_size=10, mode='val'))
+                        out = self.model(x)
+                        val_loss += loss_f(out, y).data.cpu().item()
+                    # add new data to lists
+                    losses_train.append(cum_loss / checkpoint_after)
+                    losses_val.append(val_loss / checkpoint_after)
+                    cum_loss = 0
 
-            cum_loss += loss.data.cpu().item()  # add current loss to cum_loss
+                    if np.argmin(losses_val) == len(losses_val) - 1:  # if new loss is the best
+                        torch.save(self.model, weights_file)  # save model
 
-            opt.zero_grad()  # zero old gradients
-            loss.backward()  # calculate new gradients
-            opt.step()  # perform optimization step
+                    # if there was no improvement for drop_lr_after iterations
+                    if len(losses_val) - 1 - np.argmin(losses_val) > drop_lr_after:
+                        model = torch.load(weights_file)  # load the best model
+                        lr_start /= lr_deacy_rate  # reduce learning rate
+                        opt = torch.optim.Adam(model.parameters(), lr=lr_start)
 
+                    # plot losses
+                    clear_output(True)
+                    # Compute accuracy
+                    _, y_pred = torch.max(out, 1)
+                    accuracy = (y == y_pred.squeeze()).float().mean()
+                    print(f"Epoch {epo}: trining loss={losses_train[-1]}; test loss={losses_val[-1]}; "
+                          f"val_acc={accuracy}")
+                    print(f"Learninig rate: {lr_start}")
+                    end = time.time()
+                    print(f"Iteration took {end - start}s.")
+
+                    start = end
+                    # plt.plot(losses_train, c="r")
+                    # plt.plot(losses_val, c="g")
+                    # plt.show()
+
+                    # ================================================================== #
+                    #                        Tensorboard Logging                         #
+                    # ================================================================== #
+
+                    # tensorboard --logdir=D:\Github\Wafer_maps\logs --port=6006
+                    # http://localhost:6006/
+
+                    # 1. Log scalar values (scalar summary)
+                    info = {'loss': loss.item(), 'accuracy': accuracy.item()}
+
+                    for tag, value in info.items():
+                        self.logger.scalar_summary(tag, value, cur_step + 1)
+
+                    # 2. Log values and gradients of the parameters (histogram summary)
+                    for tag, value in self.model.named_parameters():
+                        tag = tag.replace('.', '/')
+                        self.logger.histo_summary(tag, value.data.cpu().numpy(), cur_step + 1)
+                        self.logger.histo_summary(tag + '/grad', value.grad.data.cpu().numpy(), cur_step + 1)
+
+                    # 3. Log training images (image summary)
+                    info = {'images': (x.view(-1, 96, 96)[:10].cpu().numpy(), y_pred.data.tolist())}
+
+                    for tag, images in info.items():
+                        self.logger.image_summary(tag, images, cur_step + 1)
+
+                    # If the model could not get better even after lr decay, then stop training
+                    if lr_start < 1e-6:
+                        print(f"Early stop at {cur_step}")
+                        return
+
+    def plot_architecture(self):
+        print(self.model)
+        w = torch.zeros([2, 1, 96, 96])
+        if self.is_cuda:
+            w = w.cuda()
+            self.model = self.model.to("cuda:0")
+
+        return hl.build_graph(self.model, w)
+
+    def load_data(self):
+        args = {'synthesized_path_name': 'synthesized_test_database.pkl',
+                'failure_types_ratio': {'Center': 0.1,
+                                        'Donut': 0.1,
+                                        'Edge-Loc': 0.1,
+                                        'Edge-Ring': 0.1,
+                                        'Loc': 0.1,
+                                        'Random': 0.1,
+                                        'Scratch': 0.1,
+                                        'Near-full': 0.1}
+                }
+        data = create_data.TrainingDatabaseCreator()
+        self.train, self.test, self.val = data.make_training_database(**args)
+
+        labels = [None] * self.train.shape[0]
+
+        i = 0
+        for index, row in self.train.iterrows():
+            label = row.failureType[0]
+            labels[i] = label
             i += 1
-            if i % checkpoint_after == 0:
-                val_loss = 0
-                # measure loss on validation
-                for (x, y) in test_batch_generator(test_path, batch_size):
-                    out = model(x)
-                    val_loss += loss_f(out, y).data.cpu().item()
-                # add new data to lists
-                losses_train.append(cum_loss / 1000)
-                losses_val.append(val_loss / 1000)
-                cum_loss = 0
 
-                if np.argmin(losses_val) == len(losses_val) - 1:  # if new loss is the best
-                    torch.save(model, weights_file)  # save model
+        mlb = MultiLabelBinarizer()
+        labels = mlb.fit_transform(labels)
+        self.mlb = mlb
 
-                # if there was no improvement for drop_lr_after iterations
-                if len(losses_val) - 1 - np.argmin(losses_val) > drop_lr_after:
-                    model = torch.load(weights_file)  # load the best model
-                    lr_start /= lr_deacy_rate  # reduce learning rate
-                    opt = torch.optim.Adam(model.parameters(), lr=lr_start)
+        # print(labels.shape)
+        # print("class labels:")
+        # for (i, label) in enumerate(mlb.classes_):
+        #     print("{}. {}".format(i + 1, label))
 
-                # plot losses
-                clear_output(True)
-                print(f"Epoch {epo}: trining loss={losses_train[-1]}; test loss={losses_val[-1]}")
-                print(f"Learninig rate: {lr_start}")
-                end = time.time()
-                print(f"Iteration took {end - start}s.")
+        return True
 
-                start = end
-                plt.plot(losses_train, c="r")
-                plt.plot(losses_val, c="g")
-                plt.show()
+    def plot_errors(self):
+        print('[INFO] Plot errors...')
+        self.model = self.model.eval()
+        out_map = []
+        out_class = []
+        data = self.test.sample(frac=1).reset_index(drop=True)
+        for index, row in data.iterrows():
+            out_map += [row.waferMap]
+            out_class += [row.failureType[0]]
 
-                # If the model could not get better even after lr decay, then stop training
-                if lr_start < 1e-6:
-                    print(f"Early stop at {i}")
-                    return
+        out_map = np.array(out_map)
+        out_map = out_map.reshape(self.image_reshape)
+        out_class = self.mlb.transform(out_class)
+        if self.is_cuda:
+            x = torch.tensor(out_map, dtype=torch.float32).cuda()
+            y = torch.LongTensor(out_class).cuda()
+        else:
+            x = torch.tensor(out_map, dtype=torch.float32)
+            y = torch.LongTensor(out_class)
+
+        y_pred = list(torch.argmax(self.model(x), 1).cpu().numpy())
+        y_true = list(torch.argmax(y, 1).cpu().numpy())
+
+        print(f"Top-1 Accuracy: {accuracy_score(y_pred, y_true)}")
+
+        def plot_confusion_matrix(cm, normalize=False, title='Confusion matrix', cmap=plt.cm.Blues):
+            """
+            This function prints and plots the confusion matrix.
+            Normalization can be applied by setting `normalize=True`.
+            """
+            if normalize:
+                cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+            types = ['Center', 'Donut', 'Edge-Loc',
+                     'Edge-Ring', 'Loc', 'Random',
+                     'Scratch', 'Near-full']
+            l = np.arange(len(types))
+            plt.imshow(cm, interpolation='nearest', cmap=cmap)
+            plt.title(title)
+            plt.colorbar()
+
+            fmt = '.2f' if normalize else 'd'
+            thresh = cm.max() / 2.
+            for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+                plt.text(j, i, format(cm[i, j], fmt),
+                         horizontalalignment="center",
+                         color="white" if cm[i, j] > thresh else "black")
+
+            plt.tight_layout()
+            plt.ylabel('True label')
+            plt.xlabel('Predicted label')
+
+        cnf_matrix = confusion_matrix(y_true, y_pred)
+        np.set_printoptions(precision=2)
+
+        _, axes = plt.subplots(nrows=1, ncols=2, figsize=(15, 6))
+        types = ['Center', 'Donut', 'Edge-Loc',
+                 'Edge-Ring', 'Loc', 'Random',
+                 'Scratch', 'Near-full']
+        l = np.arange(len(types))
+        for ax in axes:
+            ax.set_yticks(l)
+            ax.set_yticklabels(types)
+            ax.set_xticks(l)
+            ax.set_xticklabels(types, rotation=45)
+
+        # Plot non-normalized confusion matrix
+        plt.subplot(axes[0])
+        plot_confusion_matrix(cnf_matrix, title='Confusion matrix')
+
+        # Plot normalized confusion matrix
+        plt.subplot(axes[1])
+        plot_confusion_matrix(cnf_matrix, normalize=True, title='Normalized confusion matrix')
+
+        plt.show()
+
+        return True
+
+    def main(self):
+        self.load_data()
+        if self.is_cuda:
+            self.model.to("cuda:0")
+
+        self.start_train_model(num_epo=10, batch_size=10,
+                               weights_file="output/models/lenet.torch", checkpoint_after=10,
+                               lr_start=1e-3, lr_deacy_rate=10, drop_lr_after=10)
+
+        return True
 
 
-def plot_architecture(model):
-    w = torch.zeros([1, 3, 32, 32])
-    if is_cuda:
-        w = w.cuda()
-    return hl.build_graph(model, w)
+model = TrainModel()
+model.main()
 
-def main():
-    train_path = "cifar_data/train/"
-    test_path = "cifar_data/test/"
-
-    with open(test_path + 'test_batch', 'rb') as fo:
-        dict_ = pickle.load(fo, encoding='bytes')
-    labels = dict_[b"labels"]
-    data = dict_[b"data"].reshape((-1, 3, 32, 32))
-
-    model = models.LeNet(32)
-    if is_cuda:
-        model.to("cuda:0")
-
-    train(model, train_path, test_path, 50, 16, "lenet.torch", lr_start=1e-3)
-
-
-def plot_errors(model):
-    pred = []
-    for (x, _) in test_batch_generator(test_path, batch_size=20):
-        pred += list(torch.argmax(model(x), 1).cpu().numpy())
-
-    print(f"Top-1 Accuracy: {accuracy_score(pred, labels)}")
-    plt.figure(figsize=(12, 10))
-    sns.heatmap(confusion_matrix(pred, labels)*(1-np.eye(10)), annot=True)
-
-
-if __name__ == '__main__':
-    main()
