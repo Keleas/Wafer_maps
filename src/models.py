@@ -15,13 +15,13 @@ import hiddenlayer as hl
 
 # Create LeNet Class
 class LeNet(nn.Module):
-    def __init__(self, image_size):
+    def __init__(self):
         # Initialize the super class
         super(LeNet, self).__init__()
 
         # Define model weights
         # We use Convolution + MaxPooling for each layer
-        self.conv_1 = nn.Conv2d(3, 20, 5, padding=2)  # input channels: 3, output channels: 20, kernel size: 5
+        self.conv_1 = nn.Conv2d(1, 20, 5, padding=2)  # input channels: 3, output channels: 20, kernel size: 5
         # padding = (kernel size - 1) / 2
         self.mp_1 = nn.MaxPool2d(2)  # MaxPooling 2X2
 
@@ -31,7 +31,7 @@ class LeNet(nn.Module):
         self.conv_3 = nn.Conv2d(50, 100, 3, padding=1)  # input channels: 50, output channels: 100, kernel size: 3
         self.mp_3 = nn.MaxPool2d(2)
 
-        self.dense_1 = nn.Linear(16 * 100, 500)  # Fully-connected layer, 500 outputs
+        self.dense_1 = nn.Linear(144 * 100, 500)  # Fully-connected layer, 500 outputs
         # input features = (32/2**(num MaxPool layers))*(num previous output channels)
         self.dense_2 = nn.Linear(500, 10)
 
@@ -61,13 +61,13 @@ class LeNet(nn.Module):
 
 # Create LeNet Class
 class BN_LeNet(nn.Module):
-    def __init__(self, image_size):
+    def __init__(self):
         # Initialize the super class
         super(BN_LeNet, self).__init__()
 
         # Define model weights
         # We use Convolution + MaxPooling for each layer
-        self.conv_1 = nn.Conv2d(3, 20, 5, padding=2)  # input channels: 3, output channels: 20, kernel size: 5
+        self.conv_1 = nn.Conv2d(1, 20, 5, padding=2)  # input channels: 3, output channels: 20, kernel size: 5
         # padding = (kernel size - 1) / 2
         self.bn_1 = nn.BatchNorm2d(20)  # Batch Normalization
         self.mp_1 = nn.MaxPool2d(2)  # MaxPooling 2X2
@@ -80,7 +80,7 @@ class BN_LeNet(nn.Module):
         self.bn_3 = nn.BatchNorm2d(100)  # Batch Normalization
         self.mp_3 = nn.MaxPool2d(2)
 
-        self.dense_1 = nn.Linear(16 * 100, 500)  # Fully-connected layer, 500 outputs
+        self.dense_1 = nn.Linear(144 * 100, 500)  # Fully-connected layer, 500 outputs
         # input features = (32/2**(num MaxPool layers))*(num previous output channels)
         self.bn_4 = nn.BatchNorm1d(500)  # Batch Normalization
         self.dense_2 = nn.Linear(500, 10)
@@ -133,7 +133,7 @@ class NIN(nn.Module):
     def __init__(self):
         super(NIN, self).__init__()
 
-        self.conv_1 = MLPConv(3, 10, 20, 20)
+        self.conv_1 = MLPConv(1, 10, 20, 20)
         self.mp_1 = nn.MaxPool2d(2)
 
         self.conv_2 = MLPConv(20, 30, 50, 50)
@@ -142,7 +142,7 @@ class NIN(nn.Module):
         self.conv_3 = MLPConv(50, 70, 100, 100)
         self.mp_3 = nn.MaxPool2d(2)
 
-        self.dense_1 = nn.Linear(16 * 100, 500)
+        self.dense_1 = nn.Linear(144 * 100, 500)
         self.bn = nn.BatchNorm1d(500)
         self.dense_2 = nn.Linear(500, 10)
 
@@ -214,7 +214,7 @@ class InceptionV1(nn.Module):
     def __init__(self):
         super(InceptionV1, self).__init__()
 
-        self.c1 = Inception(3, 4)
+        self.c1 = Inception(1, 4)
         self.c2 = Inception(16, 8)
         self.c3 = Inception(32, 16)
 
@@ -222,7 +222,7 @@ class InceptionV1(nn.Module):
         self.m2 = nn.MaxPool2d(2)
         self.m3 = nn.MaxPool2d(2)
 
-        self.l1 = nn.Linear(1024, 500)
+        self.l1 = nn.Linear(9216, 500)
         self.bn = nn.BatchNorm1d(500)
         self.l2 = nn.Linear(500, 10)
 
@@ -268,7 +268,7 @@ class ResNet(nn.Module):
     def __init__(self, num_residual):
         super(ResNet, self).__init__()
 
-        self.conv_1 = nn.Conv2d(3, 20, 7, padding=3)
+        self.conv_1 = nn.Conv2d(1, 20, 7, padding=3)
         self.bn_1 = nn.BatchNorm2d(20)
         # define list of residual blocks
         self.res_block_1 = [(Residual(ResNetBlock(20)), nn.BatchNorm2d(20)) for i in range(num_residual)]
@@ -295,7 +295,7 @@ class ResNet(nn.Module):
             self.add_module("res_bn_3_" + str(i), bn)
         self.mp_3 = nn.MaxPool2d(2)
 
-        self.l1 = nn.Linear(16 * 50, 500)
+        self.l1 = nn.Linear(144 * 50, 500)
         self.bn = nn.BatchNorm1d(500)
         self.l2 = nn.Linear(500, 10)
 
@@ -353,7 +353,7 @@ class DenseNet(nn.Module):
     def __init__(self):
         super(DenseNet, self).__init__()
 
-        self.conv_1 = nn.Conv2d(3, 20, 3, padding=1)
+        self.conv_1 = nn.Conv2d(1, 20, 3, padding=1)
         self.bn_1 = nn.BatchNorm2d(20)
         self.db_1 = DenseBlock(20)
         self.mp_1 = nn.MaxPool2d(2)
@@ -368,7 +368,7 @@ class DenseNet(nn.Module):
         self.db_3 = DenseBlock(100)
         self.mp_3 = nn.MaxPool2d(2)
 
-        self.dense_1 = nn.Linear(16 * 100, 500)
+        self.dense_1 = nn.Linear(144 * 100, 500)
         self.bn = nn.BatchNorm1d(500)
         self.dense_2 = nn.Linear(500, 10)
 
@@ -422,10 +422,10 @@ class Xception(nn.Module):
     def __init__(self):
         super(Xception, self).__init__()
 
-        self.c1 = XConv(3, 10)
+        self.c1 = XConv(1, 10)
         self.c2 = XConv(10, 20)
 
-        self.sc1 = nn.Conv2d(3, 20, 1, 2)
+        self.sc1 = nn.Conv2d(1, 20, 1, 2)
 
         self.c3 = XConv(20, 35)
         self.c4 = XConv(35, 50)
@@ -444,7 +444,7 @@ class Xception(nn.Module):
         self.m2 = nn.MaxPool2d(2)
         self.m3 = nn.MaxPool2d(2)
 
-        self.l1 = nn.Linear(16 * 100, 500)
+        self.l1 = nn.Linear(144 * 100, 500)
         self.bn = nn.BatchNorm1d(500)
         self.l2 = nn.Linear(500, 10)
 
@@ -510,7 +510,7 @@ class MobileNet(nn.Module):
 
         self.activation = nn.ReLU6()
 
-        self.conv_0 = LinearBottleneck(3, 5, 20)
+        self.conv_0 = LinearBottleneck(1, 5, 20)
 
         self.conv_1 = Residual(LinearBottleneck(20, 5))
         self.conv_2 = Residual(LinearBottleneck(20, 5))
@@ -589,7 +589,7 @@ class ResNeXt(nn.Module):
 
         self.activation = nn.ReLU6()
 
-        self.conv_0 = Bottleneck(3, 1, output_shape=20)
+        self.conv_0 = Bottleneck(1, 1, output_shape=20)
 
         self.conv_1 = Residual(Bottleneck(20, 1, 5))
         self.conv_2 = Residual(Bottleneck(20, 1, 5))
@@ -649,7 +649,7 @@ class SE_LeNet(nn.Module):
     def __init__(self):
         super(SE_LeNet, self).__init__()
 
-        self.conv_1 = nn.Conv2d(3, 20, 5, padding=2)
+        self.conv_1 = nn.Conv2d(1, 20, 5, padding=2)
         self.bn_1 = nn.BatchNorm2d(20)
         self.se_1 = SEBlock(20)
         self.mp_1 = nn.MaxPool2d(2)
@@ -664,7 +664,7 @@ class SE_LeNet(nn.Module):
         self.se_3 = SEBlock(100)
         self.mp_3 = nn.MaxPool2d(2)
 
-        self.dense_1 = nn.Linear(16 * 100, 500)
+        self.dense_1 = nn.Linear(144 * 100, 500)
         self.bn_4 = nn.BatchNorm1d(500)
         self.dense_2 = nn.Linear(500, 10)
 
