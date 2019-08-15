@@ -937,19 +937,19 @@ class TrainingDatabaseCreator(object):
                 testing_database = test_real
 
         testing_database, val_database = train_test_split(testing_database,
-                                                          test_size=0.3,
+                                                          test_size=0.7,
                                                           random_state=42,
                                                           shuffle=True)
 
         full_dim = full_real_database.shape[0] + synthesized_database.shape[0]
         print('Database Dimensions\n'
-              'full database: {}\n'
-              'train: {} - {:.4f}%\n'
-              'test: {} - {:.4f}%\n'
-              'val {} - {:.4f}%'.format(full_dim,
-                                        training_database.shape, training_database.shape[0] / full_dim,
-                                        testing_database.shape, testing_database.shape[0] / full_dim,
-                                        val_database.shape, val_database.shape[0] / full_dim))
+              '* full database: {}\n'
+              '* train: {} - {:.4f}%\n'
+              '* test: {} - {:.4f}%\n'
+              '* val {} - {:.4f}%'.format(full_dim,
+                                          training_database.shape, training_database.shape[0] / full_dim,
+                                          testing_database.shape, testing_database.shape[0] / full_dim,
+                                          val_database.shape, val_database.shape[0] / full_dim))
         print('reserved time: {:.2f}s'.format(time.time() - start_time))
         gc.collect()
         return training_database, testing_database, val_database
