@@ -958,15 +958,15 @@ class TrainingDatabaseCreator(object):
 # create_data = SynthesizedDatabaseCreator()
 # create_data.create_synthesized_database('synthesized_test_database.pkl')
 
-args = {'synthesized_path_name': 'synthesized_test_database.pkl',
-        'failure_types_ratio': {'Center': 0.1,
-                                'Donut': 0.1,
-                                'Edge-Loc': 0.1,
-                                'Edge-Ring': 0.1,
-                                'Loc': 0.1,
-                                'Random': 0.1,
-                                'Scratch': 0.1,
-                                'Near-full': 0.1}
-        }
-data = TrainingDatabaseCreator()
-data.make_training_database(**args)
+# args = {'synthesized_path_name': 'synthesized_test_database.pkl',
+#         'failure_types_ratio': {'Center': 0.1,
+#                                 'Donut': 0.1,
+#                                 'Edge-Loc': 0.1,
+#                                 'Edge-Ring': 0.1,
+#                                 'Loc': 0.1,
+#                                 'Random': 0.1,
+#                                 'Scratch': 0.1,
+#                                 'Near-full': 0.1}
+#         }
+# data = TrainingDatabaseCreator()
+# data.make_training_database(**args)
