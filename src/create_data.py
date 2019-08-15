@@ -7,9 +7,13 @@ import math
 import random
 from tqdm import tqdm
 import gc
+import time
 from sklearn.model_selection import train_test_split
 from multiprocessing import cpu_count
 from joblib import Parallel, delayed
+
+import warnings
+warnings.filterwarnings("ignore")
 
 
 class SynthesizedDatabaseCreator(object):
@@ -764,7 +768,7 @@ class SynthesizedDatabaseCreator(object):
         :return:
         """
         synthesized_base = [None] * N
-        for n in range(N):
+        for n in tqdm(range(N)):
             # тестовый полигон
             template = self.template_map
             COLOR_SCALE = 5
@@ -827,10 +831,10 @@ class SynthesizedDatabaseCreator(object):
 
         return df_random
 
-    def get_synthesized_database(self, database_name):
+    def create_synthesized_database(self, synthesized_path_name):
         """
 
-        :param database_name:
+        :param synthesized_path_name:
         :return:
         """
 
@@ -854,7 +858,7 @@ class SynthesizedDatabaseCreator(object):
         df['failureNum'] = df.failureType
         df = df.replace({'failureNum': mapping_type})
 
-        df.to_pickle('input/' + database_name)
+        df.to_pickle('input/' + synthesized_path_name)
 
         return True
 
@@ -864,7 +868,8 @@ class TrainingDatabaseCreator(object):
 
     """
     def __init__(self):
-        self.full_database_name = 'input/LSWMD.pkl'
+        self.full_database_path = 'input/LSWMD.pkl'
+        self.database_only_patterns_path = 'input/df_withpattern.pkl'
         self.IMAGE_DIMS = (96, 96, 1)
 
     def read_full_data(self, synthesized_path_name=None):
@@ -873,43 +878,54 @@ class TrainingDatabaseCreator(object):
         :param synthesized_path_name:
         :return:
         """
-        full_real_database = pd.read_pickle(self.full_database_name)
+        print('[INFO] Reading databases...')
+        start_time = time.time()
+        try:
+            full_real_database = pd.read_pickle(self.database_only_patterns_path)
+        except FileNotFoundError:
+            print('[INFO] Prepared full database not found\n'
+                  'Loading full database...')
+            full_real_database = pd.read_pickle(self.full_database_path)
+            mapping_type = {'Center': 0, 'Donut': 1, 'Edge-Loc': 2,
+                            'Edge-Ring': 3, 'Loc': 4, 'Random': 5,
+                            'Scratch': 6, 'Near-full': 7, 'none': 8}
+            full_real_database['failureNum'] = full_real_database.failureType
+            full_real_database = full_real_database.replace({'failureNum': mapping_type})
+            full_real_database = full_real_database[(full_real_database['failureNum'] >= 0) &
+                                                    (full_real_database['failureNum'] <= 7)]
+            full_real_database = full_real_database.reset_index()
+            full_real_database = full_real_database.drop(labels=['dieSize', 'lotName', 'waferIndex',
+                                                                 'trianTestLabel', 'index'], axis=1)
+            full_real_database.to_pickle(self.database_only_patterns_path)
 
         synthesized_database = None
         if synthesized_path_name:
             synthesized_database = pd.read_pickle('input/' + synthesized_path_name)
         else:
-            pass
+            print('[INFO] Synthesized database not found')
 
+        print('reserved time: {:.2f}s'.format(time.time() - start_time))
         return full_real_database, synthesized_database
 
-    def make_training_database(self):
-        """
+    def make_training_database(self, synthesized_path_name, failure_types_ratio):
 
-        :return:
-        """
-
-        full_real_database, synthesized_database = self.read_full_data()
-        synthesized_database['failureType'] = synthesized_database['failureType'].map(lambda label: [[label]])
-
+        full_real_database, synthesized_database = self.read_full_data(synthesized_path_name)
+        print('[INFO] Making train/test/val databases...')
+        start_time = time.time()
+        try:
+            synthesized_database['failureType'] = synthesized_database['failureType'].map(lambda label: [[label]])
+        except TypeError:
+            print('Please, enter a path of the synthesized database')
+            return None
         full_real_database['waferMap'] = full_real_database['waferMap'].map(lambda waf_map:
                                                                             cv2.resize(waf_map,
                                                                                        dsize=(self.IMAGE_DIMS[0],
                                                                                               self.IMAGE_DIMS[1]),
                                                                                        interpolation=cv2.INTER_CUBIC))
-
         training_database = synthesized_database
         testing_database = None
-        failure_types_ratio = {'Center': 0.1,
-                               'Donut': 0.1,
-                               'Edge-Loc': 0.1,
-                               'Edge-Ring': 0.1,
-                               'Loc': 0.1,
-                               'Random': 0.1,
-                               'Scratch': 0.1,
-                               'Near-full': 0.1}
         for failure_type in failure_types_ratio:
-            train_real, test_real = train_test_split(full_real_database[failure_type],
+            train_real, test_real = train_test_split(full_real_database[full_real_database.failureType == failure_type],
                                                      test_size=failure_types_ratio[failure_type],
                                                      random_state=42,
                                                      shuffle=True)
@@ -920,6 +936,37 @@ class TrainingDatabaseCreator(object):
             except ValueError:
                 testing_database = test_real
 
-        gc.collect()
+        testing_database, val_database = train_test_split(testing_database,
+                                                          test_size=0.3,
+                                                          random_state=42,
+                                                          shuffle=True)
 
-        return training_database, testing_database
+        full_dim = full_real_database.shape[0] + synthesized_database.shape[0]
+        print('Database Dimensions\n'
+              'full database: {}\n'
+              'train: {} - {:.4f}%\n'
+              'test: {} - {:.4f}%\n'
+              'val {} - {:.4f}%'.format(full_dim,
+                                        training_database.shape, training_database.shape[0] / full_dim,
+                                        testing_database.shape, testing_database.shape[0] / full_dim,
+                                        val_database.shape, val_database.shape[0] / full_dim))
+        print('reserved time: {:.2f}s'.format(time.time() - start_time))
+        gc.collect()
+        return training_database, testing_database, val_database
+
+
+# create_data = SynthesizedDatabaseCreator()
+# create_data.create_synthesized_database('synthesized_test_database.pkl')
+
+args = {'synthesized_path_name': 'synthesized_test_database.pkl',
+        'failure_types_ratio': {'Center': 0.1,
+                                'Donut': 0.1,
+                                'Edge-Loc': 0.1,
+                                'Edge-Ring': 0.1,
+                                'Loc': 0.1,
+                                'Random': 0.1,
+                                'Scratch': 0.1,
+                                'Near-full': 0.1}
+        }
+data = TrainingDatabaseCreator()
+data.make_training_database(**args)
