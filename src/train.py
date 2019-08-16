@@ -2,16 +2,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 from torch import nn
-from IPython.display import clear_output
 import time
 from sklearn.metrics import confusion_matrix, accuracy_score
 import hiddenlayer as hl
 from sklearn.preprocessing import MultiLabelBinarizer
 import itertools
+from tqdm import tqdm
 
 import src.models as models
 import src.create_data as create_data
 from src.logger import Logger
+from src.torchutils import EarlyStopping, AdamW, CyclicLRWithRestarts
 
 
 class TrainModel(object):
@@ -47,7 +48,6 @@ class TrainModel(object):
                 if len(out_map) >= batch_size:
                     out_map = np.array(out_map)
                     out_map = out_map.reshape(self.image_reshape)
-                    # out_class = self.mlb.transform(out_class)
                     if self.is_cuda:
                         yield (torch.tensor(out_map, dtype=torch.float32).cuda(),
                                torch.LongTensor(out_class).cuda())
@@ -58,103 +58,117 @@ class TrainModel(object):
                     out_class = []
 
     def start_train_model(self, num_epo=10, batch_size=10,
-              weights_file="model.torch", checkpoint_after=10,
-              lr_start=1e-3, lr_deacy_rate=10, drop_lr_after=10):
+                          weights_file="model.torch", checkpoint_after=10,
+                          lr_start=1e-3, lr_deacy_rate=10, drop_lr_after=10,
+                          patience=20, steps_per_epoch=100, steps_per_epoch_val=100):
         """
         Traininig the given model
         """
-        opt = torch.optim.Adam(self.model.parameters(), lr=lr_start)  # Define the optimizer
-        loss_f = nn.CrossEntropyLoss()  # Define loss function used
+        # opt = torch.optim.Adam(self.model.parameters(), lr=lr_start)
+        # scheduler = torch.optim.lr_scheduler.CyclicLR(opt, base_lr=0.01, max_lr=0.1)
+
+        batch_size = batch_size
+        epoch_size = batch_size * steps_per_epoch
+        optimizer = AdamW(self.model.parameters(), lr=1e-3, weight_decay=1e-5)
+        scheduler = CyclicLRWithRestarts(optimizer, batch_size, epoch_size, restart_period=5, t_mult=1.2,
+                                         policy="cosine")
+        early_stopping = EarlyStopping(patience=patience, verbose=True)
+        loss_f = nn.CrossEntropyLoss()
 
         # Service variables
         losses_train = []  # save training losses
-        losses_val = []  # save validation loasses
+        losses_val = []  # save validation losses
         cur_step = 0  # current iteration
-        steps_per_epoch = 100
-        steps_per_epoch_val = 100
 
         start = time.time()
         self.model = self.model.train()
         for epo in range(num_epo):
+
+            ###################
+            # train the model #
+            ###################
             cum_loss = 0  # Zero the cumulative sum
-            for step in range(steps_per_epoch):
+            checkpoint_after = steps_per_epoch
+            scheduler.step()
+            for step in tqdm(range(steps_per_epoch)):
                 x, y = next(self.batch_generator(batch_size=batch_size, mode='train'))
                 out = self.model(x)  # calculate model outputs
                 loss = loss_f(out, y)  # calculate loss
 
                 cum_loss += loss.data.cpu().item()  # add current loss to cum_loss
 
-                opt.zero_grad()  # zero old gradients
+                optimizer.zero_grad()  # zero old gradients
                 loss.backward()  # calculate new gradients
-                opt.step()  # perform optimization step
+                optimizer.step()  # perform optimization step
+                scheduler.batch_step()
 
                 cur_step += 1
-                if cur_step % checkpoint_after == 0:
-                    val_loss = 0
-                    # measure loss on validation
-                    for val_step in range(steps_per_epoch_val):
-                        x, y = next(self.batch_generator(batch_size=batch_size, mode='val'))
-                        out = self.model(x)
-                        val_loss += loss_f(out, y).data.cpu().item()
-                    # add new data to lists
-                    losses_train.append(cum_loss / checkpoint_after)
-                    losses_val.append(val_loss / checkpoint_after)
-                    cum_loss = 0
 
-                    if np.argmin(losses_val) == len(losses_val) - 1:  # if new loss is the best
-                        torch.save(self.model, weights_file)  # save model
+            ######################
+            # validate the model #
+            ######################
+            if cur_step % checkpoint_after == 0:
+                val_loss = 0
+                # measure loss on validation
+                for val_step in range(steps_per_epoch_val):
+                    x, y = next(self.batch_generator(batch_size=batch_size, mode='val'))
+                    out = self.model(x)
+                    val_loss += loss_f(out, y).data.cpu().item()
 
-                    # if there was no improvement for drop_lr_after iterations
-                    if len(losses_val) - 1 - np.argmin(losses_val) > drop_lr_after:
-                        model = torch.load(weights_file)  # load the best model
-                        lr_start /= lr_deacy_rate  # reduce learning rate
-                        opt = torch.optim.Adam(model.parameters(), lr=lr_start)
+                # add new data to lists
+                losses_train.append(cum_loss / checkpoint_after)
+                losses_val.append(val_loss / steps_per_epoch_val)
 
-                    # plot losses
-                    clear_output(True)
-                    # Compute accuracy
-                    _, y_pred = torch.max(out, 1)
-                    accuracy = (y == y_pred.squeeze()).float().mean()
-                    print(f"Epoch {epo}: trining loss={losses_train[-1]}; test loss={losses_val[-1]}; "
-                          f"val_acc={accuracy}")
-                    print(f"Learninig rate: {lr_start}")
-                    end = time.time()
-                    print(f"Iteration took {end - start}s.")
+                if np.argmin(losses_val) == len(losses_val) - 1:  # if new loss is the best
+                    torch.save(self.model, weights_file)  # save model
 
-                    start = end
-                    # plt.plot(losses_train, c="r")
-                    # plt.plot(losses_val, c="g")
-                    # plt.show()
+                # Compute accuracy
+                _, y_pred = torch.max(out, 1)
+                accuracy = (y == y_pred.squeeze()).float().mean()
+                print('######################')
+                print(f"[Epoch {epo}] training loss={losses_train[-1]:.6f};  val_loss={losses_val[-1]:.6f}; "
+                      f"val_acc={accuracy:.6f}")
+                print(f"Learning rate: {list(scheduler.get_lr(scheduler.t_cur))}")
+                end = time.time()
+                print(f"Iteration took {end - start:.2f}s.")
 
-                    # ================================================================== #
-                    #                        Tensorboard Logging                         #
-                    # ================================================================== #
+                start = end
+                # ================================================================== #
+                #                        Tensorboard Logging                         #
+                # ================================================================== #
 
-                    # tensorboard --logdir=D:\Github\Wafer_maps\logs --port=6006
-                    # http://localhost:6006/
+                # tensorboard --logdir=D:\Github\Wafer_maps\logs --port=6006
+                # http://localhost:6006/
 
-                    # 1. Log scalar values (scalar summary)
-                    info = {'loss': loss.item(), 'accuracy': accuracy.item()}
+                # 1. Log scalar values (scalar summary)
+                info = {'loss': losses_train[-1],
+                        'val_loss': losses_val[-1],
+                        'val_acc': accuracy.item()}
 
-                    for tag, value in info.items():
-                        self.logger.scalar_summary(tag, value, cur_step + 1)
+                for tag, value in info.items():
+                    self.logger.scalar_summary(tag, value, cur_step + 1)
 
-                    # 2. Log values and gradients of the parameters (histogram summary)
-                    for tag, value in self.model.named_parameters():
-                        tag = tag.replace('.', '/')
-                        self.logger.histo_summary(tag, value.data.cpu().numpy(), cur_step + 1)
-                        self.logger.histo_summary(tag + '/grad', value.grad.data.cpu().numpy(), cur_step + 1)
+                # 2. Log values and gradients of the parameters (histogram summary)
+                for tag, value in self.model.named_parameters():
+                    tag = tag.replace('.', '/')
+                    self.logger.histo_summary(tag, value.data.cpu().numpy(), cur_step + 1)
+                    self.logger.histo_summary(tag + '/grad', value.grad.data.cpu().numpy(), cur_step + 1)
 
-                    # 3. Log training images (image summary)
-                    info = {'images': (x.view(-1, 96, 96)[:10].cpu().numpy(), y_pred.data.tolist())}
+                # 3. Log training images (image summary)
+                info = {'images': (x.view(-1, 96, 96)[:10].cpu().numpy(), y_pred.data.tolist())}
 
-                    for tag, images in info.items():
-                        self.logger.image_summary(tag, images, cur_step + 1)
+                for tag, images in info.items():
+                    self.logger.image_summary(tag, images, cur_step + 1)
 
-                    # If the model could not get better even after lr decay, then stop training
-                    if lr_start < 1e-6:
-                        print(f"Early stop at {cur_step}")
-                        return
+                # If the model could not get better even after lr decay, then stop training
+                # early_stopping needs the validation loss to check if it has decresed,
+                # and if it has, it will make a checkpoint of the current model
+                early_stopping(losses_val[-1], self.model)
+
+                if early_stopping.early_stop:
+                    print("Early stopping")
+                    print(f"Early stop at {cur_step}")
+                    return
 
     def plot_architecture(self):
         print(self.model)
@@ -177,23 +191,6 @@ class TrainModel(object):
                 }
         data = create_data.TrainingDatabaseCreator()
         self.train, self.test, self.val = data.make_training_database(**args)
-
-        labels = [None] * self.train.shape[0]
-
-        i = 0
-        for index, row in self.train.iterrows():
-            label = row.failureType[0]
-            labels[i] = label
-            i += 1
-
-        mlb = MultiLabelBinarizer()
-        labels = mlb.fit_transform(labels)
-        self.mlb = mlb
-
-        # print(labels.shape)
-        # print("class labels:")
-        # for (i, label) in enumerate(mlb.classes_):
-        #     print("{}. {}".format(i + 1, label))
 
         return True
 
@@ -282,7 +279,7 @@ class TrainModel(object):
         if self.is_cuda:
             self.model.to("cuda:0")
 
-        self.start_train_model(num_epo=10, batch_size=100,
+        self.start_train_model(num_epo=100, batch_size=200,
                                weights_file="output/models/lenet.torch", checkpoint_after=10,
                                lr_start=1e-3, lr_deacy_rate=10, drop_lr_after=10)
 
