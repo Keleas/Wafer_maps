@@ -1,20 +1,13 @@
-import pickle
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 import torch
 from torch import nn
-from torch import autograd as ag
 from IPython.display import clear_output
-import os
-import seaborn as sns
 import time
 from sklearn.metrics import confusion_matrix, accuracy_score
 import hiddenlayer as hl
 from sklearn.preprocessing import MultiLabelBinarizer
 import itertools
-from sklearn.metrics import confusion_matrix
-from matplotlib import gridspec
 
 import src.models as models
 import src.create_data as create_data
@@ -24,7 +17,7 @@ from src.logger import Logger
 class TrainModel(object):
     def __init__(self):
         self.is_cuda = torch.cuda.is_available()
-        self.model = models.LeNet()
+        self.model = models.BN_LeNet()
         if self.is_cuda:
             self.model = self.model.to("cuda:0")
         self.image_reshape = (-1, 1, 96, 96)
@@ -85,7 +78,7 @@ class TrainModel(object):
         for epo in range(num_epo):
             cum_loss = 0  # Zero the cumulative sum
             for step in range(steps_per_epoch):
-                x, y = next(self.batch_generator(batch_size=10, mode='train'))
+                x, y = next(self.batch_generator(batch_size=batch_size, mode='train'))
                 out = self.model(x)  # calculate model outputs
                 loss = loss_f(out, y)  # calculate loss
 
@@ -100,7 +93,7 @@ class TrainModel(object):
                     val_loss = 0
                     # measure loss on validation
                     for val_step in range(steps_per_epoch_val):
-                        x, y = next(self.batch_generator(batch_size=10, mode='val'))
+                        x, y = next(self.batch_generator(batch_size=batch_size, mode='val'))
                         out = self.model(x)
                         val_loss += loss_f(out, y).data.cpu().item()
                     # add new data to lists
@@ -180,8 +173,7 @@ class TrainModel(object):
                                         'Edge-Ring': 0.1,
                                         'Loc': 0.1,
                                         'Random': 0.1,
-                                        'Scratch': 0.1,
-                                        'Near-full': 0.1}
+                                        'Scratch': 0.1}
                 }
         data = create_data.TrainingDatabaseCreator()
         self.train, self.test, self.val = data.make_training_database(**args)
@@ -211,23 +203,30 @@ class TrainModel(object):
         out_map = []
         out_class = []
         data = self.test.sample(frac=1).reset_index(drop=True)
+        y_pred = []
+        y_true = []
         for index, row in data.iterrows():
             out_map += [row.waferMap]
-            out_class += [row.failureType[0]]
+            out_class += [row.failureNum]
 
-        out_map = np.array(out_map)
-        out_map = out_map.reshape(self.image_reshape)
-        out_class = self.mlb.transform(out_class)
-        if self.is_cuda:
-            x = torch.tensor(out_map, dtype=torch.float32).cuda()
-            y = torch.LongTensor(out_class).cuda()
-        else:
-            x = torch.tensor(out_map, dtype=torch.float32)
-            y = torch.LongTensor(out_class)
+            if len(out_map) == 200:
+                out_map = np.array(out_map)
+                out_map = out_map.reshape(self.image_reshape)
+                if self.is_cuda:
+                    x = torch.tensor(out_map, dtype=torch.float32).cuda()
+                    y = torch.LongTensor(out_class).cuda()
+                else:
+                    x = torch.tensor(out_map, dtype=torch.float32)
+                    y = torch.LongTensor(out_class)
 
-        y_pred = list(torch.argmax(self.model(x), 1).cpu().numpy())
-        y_true = list(torch.argmax(y, 1).cpu().numpy())
+                y_pred.append(torch.argmax(self.model(x), 1).cpu().numpy())
+                y_true.append(y.cpu().numpy())
 
+                out_map = []
+                out_class = []
+
+        y_pred = np.array(y_pred).flatten()
+        y_true = np.array(y_true).flatten()
         print(f"Top-1 Accuracy: {accuracy_score(y_pred, y_true)}")
 
         def plot_confusion_matrix(cm, normalize=False, title='Confusion matrix', cmap=plt.cm.Blues):
@@ -237,10 +236,6 @@ class TrainModel(object):
             """
             if normalize:
                 cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-            types = ['Center', 'Donut', 'Edge-Loc',
-                     'Edge-Ring', 'Loc', 'Random',
-                     'Scratch', 'Near-full']
-            l = np.arange(len(types))
             plt.imshow(cm, interpolation='nearest', cmap=cmap)
             plt.title(title)
             plt.colorbar()
@@ -262,7 +257,7 @@ class TrainModel(object):
         _, axes = plt.subplots(nrows=1, ncols=2, figsize=(15, 6))
         types = ['Center', 'Donut', 'Edge-Loc',
                  'Edge-Ring', 'Loc', 'Random',
-                 'Scratch', 'Near-full']
+                 'Scratch']
         l = np.arange(len(types))
         for ax in axes:
             ax.set_yticks(l)
@@ -287,9 +282,11 @@ class TrainModel(object):
         if self.is_cuda:
             self.model.to("cuda:0")
 
-        self.start_train_model(num_epo=10, batch_size=10,
+        self.start_train_model(num_epo=10, batch_size=100,
                                weights_file="output/models/lenet.torch", checkpoint_after=10,
                                lr_start=1e-3, lr_deacy_rate=10, drop_lr_after=10)
+
+        self.plot_errors()
 
         return True
 
