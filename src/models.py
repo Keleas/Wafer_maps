@@ -1,16 +1,6 @@
-import pickle
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
 import torch
 from torch import nn
-from torch import autograd as ag
-from IPython.display import clear_output
-import os
-import seaborn as sns
-import time
-from sklearn.metrics import confusion_matrix, accuracy_score
-import hiddenlayer as hl
+
 
 
 # Create LeNet Class
@@ -33,7 +23,7 @@ class LeNet(nn.Module):
 
         self.dense_1 = nn.Linear(144 * 100, 500)  # Fully-connected layer, 500 outputs
         # input features = (32/2**(num MaxPool layers))*(num previous output channels)
-        self.dense_2 = nn.Linear(500, 8)
+        self.dense_2 = nn.Linear(500, 7)
 
     def forward(self, x):
         # layer 1
@@ -83,7 +73,7 @@ class BN_LeNet(nn.Module):
         self.dense_1 = nn.Linear(144 * 100, 500)  # Fully-connected layer, 500 outputs
         # input features = (32/2**(num MaxPool layers))*(num previous output channels)
         self.bn_4 = nn.BatchNorm1d(500)  # Batch Normalization
-        self.dense_2 = nn.Linear(500, 10)
+        self.dense_2 = nn.Linear(500, 7)
 
     def forward(self, x):
         # layer 1
