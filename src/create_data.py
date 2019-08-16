@@ -20,10 +20,11 @@ class SynthesizedDatabaseCreator(object):
     """
 
     """
-    def __init__(self):
-        self.IMAGE_DIMS = (96, 96, 1)
-        self.number_points = 100
+    def __init__(self, example_number, synthesized_path_name, image_dims):
+        self.IMAGE_DIMS = image_dims
+        self.number_points = example_number
         self.cpu_count = cpu_count() - 1
+        self.synthesized_path_name = synthesized_path_name
 
         def load_template_map(image_dim):
             template_path = 'input/template_wafer_map.pkl'
@@ -711,7 +712,7 @@ class SynthesizedDatabaseCreator(object):
             r[r > 2] = 1
             noise_img[mask] = r[mask]
 
-            ## сверткой расширим
+            # сверткой расширим
             kernel = np.ones((3, 3), np.uint8)
             kernel = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=np.uint8)
             noise_img = cv2.morphologyEx(noise_img, cv2.MORPH_CLOSE, kernel)
@@ -719,7 +720,7 @@ class SynthesizedDatabaseCreator(object):
 
             synthesized_base[n] = [noise_img, pattern_type]
 
-            ## для презенташки
+            # для презенташки
             if save:
                 path = 'output/test_classes/{}'.format(pattern_type)
                 try:
@@ -831,7 +832,7 @@ class SynthesizedDatabaseCreator(object):
 
         return df_random
 
-    def create_synthesized_database(self, synthesized_path_name):
+    def create_synthesized_database(self):
         """
 
         :param synthesized_path_name:
@@ -844,21 +845,20 @@ class SynthesizedDatabaseCreator(object):
         df_center = self.generator_center(mode=0)
         df_edge_ring = self.generator_edge_ring(mode=0)
         df_edge_loc = self.generator_edge_loc(mode=0)
-        df_near_full = self.generator_near_full()
         df_random = self.generator_random()
 
         df = pd.concat([df_center, df_donut, df_edge_loc,
-                        df_edge_ring, df_loc, df_near_full,
+                        df_edge_ring, df_loc,
                         df_random, df_scratch_curved], sort=False)
 
         mapping_type = {'Center': 0, 'Donut': 1, 'Edge-Loc': 2,
                         'Edge-Ring': 3, 'Loc': 4, 'Random': 5,
-                        'Scratch': 6, 'Near-full': 7}
+                        'Scratch': 6}
 
         df['failureNum'] = df.failureType
         df = df.replace({'failureNum': mapping_type})
 
-        df.to_pickle('input/' + synthesized_path_name)
+        df.to_pickle('input/' + self.synthesized_path_name)
 
         return True
 
@@ -869,7 +869,7 @@ class TrainingDatabaseCreator(object):
     """
     def __init__(self):
         self.full_database_path = 'input/LSWMD.pkl'
-        self.database_only_patterns_path = 'input/df_withpattern.pkl'
+        self.database_only_patterns_path = 'input/df_withpattern_dim_more50.pkl'
         self.IMAGE_DIMS = (96, 96, 1)
 
     def read_full_data(self, synthesized_path_name=None):
@@ -892,11 +892,33 @@ class TrainingDatabaseCreator(object):
             full_real_database['failureNum'] = full_real_database.failureType
             full_real_database = full_real_database.replace({'failureNum': mapping_type})
             full_real_database = full_real_database[(full_real_database['failureNum'] >= 0) &
-                                                    (full_real_database['failureNum'] <= 7)]
+                                                    (full_real_database['failureNum'] <= 6)]
             full_real_database = full_real_database.reset_index()
             full_real_database = full_real_database.drop(labels=['dieSize', 'lotName', 'waferIndex',
                                                                  'trianTestLabel', 'index'], axis=1)
-            full_real_database.to_pickle(self.database_only_patterns_path)
+
+            ######################
+            # Get fixed size of maps
+            out_map = []
+            out_class = []
+            dim_size = 50
+            for index, row in full_real_database.iterrows():
+                waf_map = row.waferMap
+                waf_type = row.failureType
+
+                if waf_map.shape[0] > dim_size and waf_map.shape[1] > dim_size:
+                    out_map += [waf_map]
+                    out_class += [waf_type[0][0]]
+
+            database = pd.DataFrame(data=np.vstack((out_map, out_class)).T, columns=['waferMap', 'failureType'])
+            mapping_type = {'Center': 0, 'Donut': 1, 'Edge-Loc': 2,
+                            'Edge-Ring': 3, 'Loc': 4, 'Random': 5,
+                            'Scratch': 6, 'Near-full': 7, 'none': 8}
+            database['failureNum'] = database.failureType
+            database = database.replace({'failureNum': mapping_type})
+
+            full_real_database = database
+            database.to_pickle(self.database_only_patterns_path)
 
         synthesized_database = None
         if synthesized_path_name:
@@ -913,7 +935,7 @@ class TrainingDatabaseCreator(object):
         print('[INFO] Making train/test/val databases...')
         start_time = time.time()
         try:
-            synthesized_database['failureType'] = synthesized_database['failureType'].map(lambda label: [[label]])
+            synthesized_database['failureType'] = synthesized_database['failureType'].map(lambda label: label)
         except TypeError:
             print('Please, enter a path of the synthesized database')
             return None
@@ -926,7 +948,7 @@ class TrainingDatabaseCreator(object):
         testing_database = None
         for failure_type in failure_types_ratio:
             train_real, test_real = train_test_split(full_real_database[full_real_database.failureType == failure_type],
-                                                     test_size=failure_types_ratio[failure_type],
+                                                     train_size=failure_types_ratio[failure_type],
                                                      random_state=42,
                                                      shuffle=True)
 
@@ -943,10 +965,10 @@ class TrainingDatabaseCreator(object):
 
         full_dim = full_real_database.shape[0] + synthesized_database.shape[0]
         print('Database Dimensions\n'
-              '* full database: {}\n'
+              '* full database: {}, real: {}, synth: {}\n'
               '* train: {} - {:.4f}%\n'
               '* test: {} - {:.4f}%\n'
-              '* val {} - {:.4f}%'.format(full_dim,
+              '* val {} - {:.4f}%'.format(full_dim, full_real_database.shape[0], synthesized_database.shape[0],
                                           training_database.shape, training_database.shape[0] / full_dim,
                                           testing_database.shape, testing_database.shape[0] / full_dim,
                                           val_database.shape, val_database.shape[0] / full_dim))
@@ -955,18 +977,21 @@ class TrainingDatabaseCreator(object):
         return training_database, testing_database, val_database
 
 
-# create_data = SynthesizedDatabaseCreator()
-# create_data.create_synthesized_database('synthesized_test_database.pkl')
+# args = {'example_number': 30000,
+#         'synthesized_path_name': 'synthesized_database_210000.pkl',  # ex_num * 7
+#         'image_dims': (96, 96, 1)}
+#
+# create_data = SynthesizedDatabaseCreator(**args)
+# create_data.create_synthesized_database()
 
 # args = {'synthesized_path_name': 'synthesized_test_database.pkl',
-#         'failure_types_ratio': {'Center': 0.1,
-#                                 'Donut': 0.1,
-#                                 'Edge-Loc': 0.1,
-#                                 'Edge-Ring': 0.1,
-#                                 'Loc': 0.1,
-#                                 'Random': 0.1,
-#                                 'Scratch': 0.1,
-#                                 'Near-full': 0.1}
+#         'failure_types_ratio': {'Center': 0.0,
+#                                 'Donut': 0.0,
+#                                 'Edge-Loc': 0.0,
+#                                 'Edge-Ring': 0.0,
+#                                 'Loc': 0.0,
+#                                 'Random': 0.0,
+#                                 'Scratch': 0.0}
 #         }
 # data = TrainingDatabaseCreator()
 # data.make_training_database(**args)
