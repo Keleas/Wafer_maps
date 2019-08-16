@@ -57,21 +57,23 @@ class TrainModel(object):
                     out_map = []
                     out_class = []
 
-    def start_train_model(self, num_epo=10, batch_size=10,
-                          weights_file="model.torch", checkpoint_after=10,
-                          lr_start=1e-3, lr_deacy_rate=10, drop_lr_after=10,
-                          patience=20, steps_per_epoch=100, steps_per_epoch_val=100):
+    def start_train_model(self, num_epo=10, batch_size=10, steps_per_epoch=100, steps_per_epoch_val=100,
+                          lr_start=1e-3, lr_weight_decay=1e-5, lr_restart_period=3,
+                          lr_t_mult=1.2, lr_policy="cosine",
+                          patience=20, weights_file="model.torch", checkpoint_after=10):
         """
         Traininig the given model
         """
         # opt = torch.optim.Adam(self.model.parameters(), lr=lr_start)
         # scheduler = torch.optim.lr_scheduler.CyclicLR(opt, base_lr=0.01, max_lr=0.1)
 
+        optimizer = AdamW(self.model.parameters(), lr=lr_start, weight_decay=lr_weight_decay)
         batch_size = batch_size
         epoch_size = batch_size * steps_per_epoch
-        optimizer = AdamW(self.model.parameters(), lr=1e-3, weight_decay=1e-5)
-        scheduler = CyclicLRWithRestarts(optimizer, batch_size, epoch_size, restart_period=5, t_mult=1.2,
-                                         policy="cosine")
+        scheduler = CyclicLRWithRestarts(optimizer, batch_size, epoch_size,
+                                         restart_period=lr_restart_period,
+                                         t_mult=lr_t_mult,
+                                         policy=lr_policy)
         early_stopping = EarlyStopping(patience=patience, verbose=True)
         loss_f = nn.CrossEntropyLoss()
 
@@ -160,9 +162,7 @@ class TrainModel(object):
                 for tag, images in info.items():
                     self.logger.image_summary(tag, images, cur_step + 1)
 
-                # If the model could not get better even after lr decay, then stop training
-                # early_stopping needs the validation loss to check if it has decresed,
-                # and if it has, it will make a checkpoint of the current model
+                # If the model could not get better, then stop training
                 early_stopping(losses_val[-1], self.model)
 
                 if early_stopping.early_stop:
@@ -280,7 +280,7 @@ class TrainModel(object):
             self.model.to("cuda:0")
 
         self.start_train_model(num_epo=100, batch_size=200,
-                               weights_file="output/models/lenet.torch", checkpoint_after=10,
+                               weights_file="output/models/BN_LeNet.torch",
                                lr_start=1e-3, lr_deacy_rate=10, drop_lr_after=10)
 
         self.plot_errors()
