@@ -1,16 +1,24 @@
-import numpy as np
-import pandas as pd
 import os
-import matplotlib.pyplot as plt
+import gc
 import cv2
+import time
 import math
 import random
+import numpy as np
+import pandas as pd
 from tqdm import tqdm
-import gc
-import time
-from sklearn.model_selection import train_test_split
-from multiprocessing import cpu_count
+from copy import deepcopy
+import matplotlib.pyplot as plt
+
+import torch
+from torch.utils.data import Dataset
 from joblib import Parallel, delayed
+from multiprocessing import cpu_count
+from torch.utils.data import DataLoader
+from torch.utils.data.sampler import RandomSampler
+from sklearn.model_selection import train_test_split
+
+from src.transform import *
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -870,7 +878,7 @@ class TrainingDatabaseCreator(object):
     def __init__(self):
         self.full_database_path = 'input/LSWMD.pkl'
         self.database_only_patterns_path = 'input/df_withpattern_dim_more50.pkl'
-        self.IMAGE_DIMS = (96, 96, 1)
+        self.IMAGE_DIMS = (1, 96, 96)
 
     def read_full_data(self, synthesized_path_name=None):
         """
@@ -941,7 +949,7 @@ class TrainingDatabaseCreator(object):
             return None
         full_real_database['waferMap'] = full_real_database['waferMap'].map(lambda waf_map:
                                                                             cv2.resize(waf_map,
-                                                                                       dsize=(self.IMAGE_DIMS[0],
+                                                                                       dsize=(self.IMAGE_DIMS[1],
                                                                                               self.IMAGE_DIMS[1]),
                                                                                        interpolation=cv2.INTER_CUBIC))
         training_database = synthesized_database
@@ -977,21 +985,93 @@ class TrainingDatabaseCreator(object):
         return training_database, testing_database, val_database
 
 
-# args = {'example_number': 30000,
-#         'synthesized_path_name': 'synthesized_database_210000.pkl',  # ex_num * 7
-#         'image_dims': (96, 96, 1)}
-#
-# create_data = SynthesizedDatabaseCreator(**args)
-# create_data.create_synthesized_database()
+class WaferDataset(Dataset):
+    def __init__(self, image_list, mode, label_list=None,
+                 fine_size=202, pad_left=0, pad_right=0):
+        self.image_list = image_list
+        self.mode = mode
+        self.label_list = label_list
+        self.fine_size = fine_size
+        self.pad_left = pad_left
+        self.pad_right = pad_right
 
-# args = {'synthesized_path_name': 'synthesized_test_database.pkl',
-#         'failure_types_ratio': {'Center': 0.0,
-#                                 'Donut': 0.0,
-#                                 'Edge-Loc': 0.0,
-#                                 'Edge-Ring': 0.0,
-#                                 'Loc': 0.0,
-#                                 'Random': 0.0,
-#                                 'Scratch': 0.0}
-#         }
-# data = TrainingDatabaseCreator()
-# data.make_training_database(**args)
+    def __len__(self):
+        return len(self.image_list)
+
+    def __getitem__(self, idx):
+        image = deepcopy(self.image_list[idx])
+
+        if self.mode == 'train':
+            label = deepcopy(self.label_list[idx])
+
+            if self.fine_size != image.shape[0]:
+                image = cv2.resize(image, dsize=(self.fine_size, self.fine_size))
+            if self.pad_left != 0:
+                image = do_center_pad(image, self.pad_left, self.pad_right)
+
+            image = image.reshape(1, self.fine_size + self.pad_left + self.pad_right,
+                                  self.fine_size + self.pad_left + self.pad_right)
+
+            image, label = torch.from_numpy(image), torch.tensor(label)
+            return image, label
+
+        elif self.mode == 'val':
+            label = deepcopy(self.label_list[idx])
+
+            if self.fine_size != image.shape[0]:
+                image = cv2.resize(image, dsize=(self.fine_size, self.fine_size))
+            if self.pad_left != 0:
+                image = do_center_pad(image, self.pad_left, self.pad_right)
+
+            image = image.reshape(1, self.fine_size + self.pad_left + self.pad_right,
+                                  self.fine_size + self.pad_left + self.pad_right)
+
+            image, label = torch.from_numpy(image), torch.from_numpy(label)
+            return image, label
+
+        elif self.mode == 'test':
+            if self.fine_size != image.shape[0]:
+                image = cv2.resize(image, dsize=(self.fine_size, self.fine_size))
+            if self.pad_left != 0:
+                image = do_center_pad(image, self.pad_left, self.pad_right)
+
+            image = image.reshape(1, self.fine_size + self.pad_left + self.pad_right,
+                                  self.fine_size + self.pad_left + self.pad_right)
+
+            image = torch.from_numpy(image)
+            return image
+
+
+if __name__ == '__main__':
+
+    args = {'example_number': 30000,
+            'synthesized_path_name': 'synthesized_database_210000.pkl',  # ex_num * 7
+            'image_dims': (96, 96, 1)}
+
+    create_data = SynthesizedDatabaseCreator(**args)
+    create_data.create_synthesized_database()
+
+    # args = {'synthesized_path_name': 'synthesized_test_database.pkl',
+    #         'failure_types_ratio': {'Center': 0.0,
+    #                                 'Donut': 0.0,
+    #                                 'Edge-Loc': 0.0,
+    #                                 'Edge-Ring': 0.0,
+    #                                 'Loc': 0.0,
+    #                                 'Random': 0.0,
+    #                                 'Scratch': 0.0}
+    #         }
+    # data = TrainingDatabaseCreator()
+    # train, val, test = data.make_training_database(**args)
+    #
+    # train_list_im = list(train.waferMap.values)
+    # train_label = list(train.failureNum.values)
+    #
+    # train_data = WaferDataset(list(train.waferMap.values), mode='train', label_list=list(train.failureNum.values))
+    # train_loader = DataLoader(train_data,
+    #                           shuffle=RandomSampler(train_data),
+    #                           batch_size=50,
+    #                           num_workers=1,
+    #                           pin_memory=True)
+    #
+    # for image, label in train_loader:
+    #     print(label)
