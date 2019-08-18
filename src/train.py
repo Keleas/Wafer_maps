@@ -89,7 +89,7 @@ class TrainModel(object):
     def logger_step(self, cur_epoch, losses_train, losses_val, accuracy):
         print(f"[Epoch {cur_epoch}] training loss={losses_train[-1]:.6f};  val_loss={losses_val[-1]:.6f}; "
               f"val_acc={accuracy:.6f}")
-        print(f"Learning rate: {list(self.lr_scheduler.get_lr())}")
+        print(f"Learning rate: {self.lr_scheduler.get_lr()[0]:.6f}")
 
         # 1. Log scalar values (scalar summary)
         info = {'loss': losses_train[-1],
@@ -107,13 +107,13 @@ class TrainModel(object):
 
         # 3. Log training images (image summary)
         self.model.eval()
-        inputs, label = next(iter(self.val_loader))
-        inputs, label = inputs.to(device), label.to(device)
+        inputs, labels = next(iter(self.val_loader))
+        inputs, labels = inputs.to(device), labels.to(device)
         with torch.set_grad_enabled(False):
             out = self.model(inputs)
 
         _, y_pred = torch.max(out, 1)
-        info = {'images': (inputs.view(-1, 96, 96)[:10].cpu().numpy(), y_pred.data.tolist())}
+        info = {'images': (inputs.view(-1, 96, 96)[:10].cpu().numpy(), y_pred.data.tolist(), labels.data.tolist())}
 
         for tag, images in info.items():
             self.logger.image_summary(tag, images, cur_epoch + 1)
@@ -221,12 +221,15 @@ class TrainModel(object):
 
         return True
 
-    def plot_errors(self):
+    def plot_errors(self, model_name=None):
         print('[INFO] Plot errors...')
         cum_loss = 0
         predicts = []
         truths = []
-        checkpoint = torch.load(args.save_weight + 'checkpoint.pth')
+        if model_name:
+            checkpoint = torch.load(args.save_weight + model_name + '.pth')
+        else:
+            checkpoint = torch.load(args.save_weight + 'checkpoint.pth')
         test_model = self.model
         test_model.load_state_dict(checkpoint)
         test_model = test_model.to(device)
@@ -294,34 +297,37 @@ class TrainModel(object):
         plt.subplot(axes[1])
         plot_confusion_matrix(cnf_matrix, normalize=True, title='Normalized confusion matrix')
 
-        plt.savefig('output/confusion matrix/' + args.weight_name + '.jpg')
+        if not os.path.isdir('output/confusion_matrix/'):
+            os.mkdir('output/confusion_matrix/')
+
+        plt.savefig('output/confusion_matrix/' + args.weight_name + '.jpg')
         plt.show()
 
         return True
 
     def main(self):
         # Get Model
-        self.model = models.BN_LeNet()
+        self.model = models.ResNet(17)
         self.model.to(device)
 
         # Get Data
         self.load_data()  # train/val/test loaders
 
         # Start train loop
-        self.start_train()
+        # self.start_train()
 
         # # Get train results
-        self.plot_errors()
+        self.plot_errors(model_name='model_96_ResNet170')
 
         return True
 
 
 parser = argparse.ArgumentParser(description='')
-parser.add_argument('--model', default='BN_LeNet', type=str, help='Model version')
+parser.add_argument('--model', default='ResNet17', type=str, help='Model version')
 parser.add_argument('--fine_size', default=96, type=int, help='Resized image size')
 parser.add_argument('--pad_left', default=0, type=int, help='Left padding size')
 parser.add_argument('--pad_right', default=0, type=int, help='Right padding size')
-parser.add_argument('--batch_size', default=100, type=int, help='Batch size for training')
+parser.add_argument('--batch_size', default=30, type=int, help='Batch size for training')
 parser.add_argument('--epoch', default=300, type=int, help='Number of training epochs')
 parser.add_argument('--snapshot', default=10, type=int, help='Number of snapshots per fold')
 parser.add_argument('--cuda', default=True, type=bool, help='Use cuda to train model')
@@ -355,7 +361,6 @@ if __name__ == '__main__':
     # ================================================================== #
     #                        Tensorboard Logging                         #
     # ================================================================== #
-
     # tensorboard --logdir=D:\Github\Wafer_maps\logs --port=6006
     # http://localhost:6006/
 

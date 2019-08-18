@@ -24,7 +24,7 @@ class Logger(object):
         """Log a list of images."""
 
         img_summaries = []
-        images, target = images
+        images, target, truth_label = images
         mapping_type = {0: 'Center', 1: 'Donut', 2: 'Edge-Loc',
                         3: 'Edge-Ring', 4: 'Loc', 5: 'Random',
                         6: 'Scratch', 7: 'Near-full'}
@@ -41,7 +41,9 @@ class Logger(object):
                                        height=img.shape[0],
                                        width=img.shape[1])
             # Create a Summary value
-            img_summaries.append(tf.Summary.Value(tag='%s/%d, target: %s' % (tag, i, mapping_type[target[i]]),
+            img_summaries.append(tf.Summary.Value(tag='%s/%d, target: %s, truth: %s' % (tag, i,
+                                                                                        mapping_type[target[i]],
+                                                                                        mapping_type[truth_label[i]]),
                                                   image=img_sum))
 
         # Create and write Summary

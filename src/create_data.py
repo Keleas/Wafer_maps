@@ -951,7 +951,7 @@ class TrainingDatabaseCreator(object):
                                                                             cv2.resize(waf_map,
                                                                                        dsize=(self.IMAGE_DIMS[1],
                                                                                               self.IMAGE_DIMS[1]),
-                                                                                       interpolation=cv2.INTER_CUBIC))
+                                                                                       interpolation=cv2.INTER_NEAREST))
         training_database = synthesized_database
         testing_database = None
         for failure_type in failure_types_ratio:
