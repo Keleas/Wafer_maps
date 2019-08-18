@@ -1,4 +1,4 @@
-# from https://github.com/Bjarten/early-stopping-pytorch/blob/master/pytorchtools.py
+# Code referenced from https://github.com/Bjarten/early-stopping-pytorch/blob/master/pytorchtools.py
 
 import numpy as np
 import torch
@@ -47,8 +47,8 @@ class EarlyStopping:
     def save_checkpoint(self, val_loss, model):
         '''Saves model when validation loss decrease.'''
         if self.verbose:
-            print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
-        torch.save(model.state_dict(), 'output/models/checkpoint.pt')
+            print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model...')
+        torch.save(model.state_dict(), 'output/weights/checkpoint.pth')
         self.val_loss_min = val_loss
 
 
