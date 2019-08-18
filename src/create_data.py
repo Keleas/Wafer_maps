@@ -987,7 +987,7 @@ class TrainingDatabaseCreator(object):
 
 class WaferDataset(Dataset):
     def __init__(self, image_list, mode, label_list=None,
-                 fine_size=202, pad_left=0, pad_right=0):
+                 fine_size=96, pad_left=0, pad_right=0):
         self.image_list = image_list
         self.mode = mode
         self.label_list = label_list
@@ -1012,7 +1012,7 @@ class WaferDataset(Dataset):
             image = image.reshape(1, self.fine_size + self.pad_left + self.pad_right,
                                   self.fine_size + self.pad_left + self.pad_right)
 
-            image, label = torch.from_numpy(image), torch.tensor(label)
+            image, label = torch.from_numpy(image).float(), torch.tensor(label)
             return image, label
 
         elif self.mode == 'val':
@@ -1026,7 +1026,7 @@ class WaferDataset(Dataset):
             image = image.reshape(1, self.fine_size + self.pad_left + self.pad_right,
                                   self.fine_size + self.pad_left + self.pad_right)
 
-            image, label = torch.from_numpy(image), torch.from_numpy(label)
+            image, label = torch.from_numpy(image).float(), torch.tensor(label)
             return image, label
 
         elif self.mode == 'test':
@@ -1038,7 +1038,7 @@ class WaferDataset(Dataset):
             image = image.reshape(1, self.fine_size + self.pad_left + self.pad_right,
                                   self.fine_size + self.pad_left + self.pad_right)
 
-            image = torch.from_numpy(image)
+            image = torch.from_numpy(image).float()
             return image
 
 
