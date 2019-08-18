@@ -2,7 +2,6 @@ import torch
 from torch import nn
 
 
-
 # Create LeNet Class
 class LeNet(nn.Module):
     def __init__(self):
