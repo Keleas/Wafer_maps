@@ -34,6 +34,13 @@ class SynthesizedDatabaseCreator(object):
         self.cpu_count = cpu_count() - 1
         self.synthesized_path_name = synthesized_path_name
 
+        def add_pattern(cur_x, add_x):
+            if cur_x == 1 and add_x == 2:
+                return add_x
+            else:
+                return cur_x
+        self.add_pattern = np.vectorize(add_pattern)
+
         def load_template_map(image_dim):
             template_path = 'input/template_wafer_map.pkl'
             template = pd.read_pickle(template_path)
@@ -47,107 +54,89 @@ class SynthesizedDatabaseCreator(object):
             return template
         self.template_map = load_template_map(self.IMAGE_DIMS)
 
-    def sawtooth_line(self, XC_, YC_, L0_, angle_, line_count, pattern_type, lam_poisson=0.2, save=False):
-        """
-
-        :param XC_:
-        :param YC_:
-        :param L0_:
-        :param angle_:
-        :param line_count:
-        :param pattern_type:
-        :param lam_poisson:
-        :param save:
-        :return:
-        """
+    def sawtooth_line(self, XC_, YC_, L0_, angle_, pattern_type, line_count=1, lam_poisson=0.2, save=False,
+                      add_patterns=[None]):
         size = XC_.shape[0]
         synthesized_base = [None] * size
 
         for n in tqdm(range(size)):
-            # иниицализация параметров прямой
-            L0 = L0_[n]
-            XC = XC_[n]
-            YC = YC_[n]
-            angle = angle_[n]
+            step = n
+            template = deepcopy(self.template_map)
 
-            # параметры уравнения
-            def delta_(x, y):
-                return int(math.sqrt(x ** 2 + y ** 2))
-            delta = np.vectorize(delta_)
-            L = L0 - np.sum(delta(XC, YC)[1:])
-            N = 200
-            x0, y0 = 0, 0
+            if add_patterns[0]:
+                for pattern in add_patterns:
+                    for img_pattern in pattern:
+                        template = self.add_pattern(template, img_pattern)
 
-            # тестовый полигон
-            template = self.template_map.copy()
             COLOR_SCALE = 2
+            for repeate in range(line_count):
+                if repeate:
+                    step = random.randint(0, size - 1)
+                # иниицализация параметров прямой
+                L0 = L0_[step]
+                XC = XC_[step]
+                YC = YC_[step]
+                angle = angle_[step]
 
-            # кусочное построение пилообразной прямой
-            for i in range(line_count):
-                # случайное удлинение или укорочение отрезка
-                rand = random.randint(-1, 0)
-                scale = 0.4
-                t = np.linspace(0, L // (line_count + rand * scale), N)
+                # параметры уравнения
+                def delta_(x, y):
+                    return int(math.sqrt(x ** 2 + y ** 2))
 
-                xc = XC[i]
-                yc = YC[i]
-                X = np.cos(angle[i]) * t + xc + x0
-                Y = np.sin(angle[i]) * t + yc + y0
-                X_ = np.around(X)
-                Y_ = np.around(Y)
+                delta = np.vectorize(delta_)
+                L = L0 - np.sum(delta(XC, YC)[1:])
+                N = 200
+                x0, y0 = 0, 0
 
-                x_prev, y_prev = x0, y0
+                # кусочное построение пилообразной прямой
+                for i in range(XC.shape[0]):
+                    # случайное удлинение или укорочение отрезка
+                    rand = random.randint(-1, 0)
+                    scale = 0.4
+                    t = np.linspace(0, L // (line_count + rand * scale), N)
 
-                x_first, y_first = 0, 0
-                for j in range(X_.shape[0]):
-                    x = int(X_[j])
-                    y = int(Y_[j])
-                    if j == 0:
-                        # первая точка прямой
-                        x_first, y_first = x, y
-                    try:
-                        if template[x, y] == 1:
-                            template[x, y] = COLOR_SCALE
-                            x0, y0 = x, y
-                    except IndexError:
-                        break
-
-                # сшивка прямых
-                if i != 0:
-                    # уравнение прямой сшивки
-                    k = (y_prev - y_first) / (x_prev - x_first + 1e-06)
-                    b = y_first - k * x_first
-                    X = np.linspace(x_prev, x_first, 20)
-                    Y = k * X + b
+                    xc = XC[i]
+                    yc = YC[i]
+                    X = np.cos(angle[i]) * t + xc + x0
+                    Y = np.sin(angle[i]) * t + yc + y0
                     X_ = np.around(X)
                     Y_ = np.around(Y)
+
+                    x_prev, y_prev = x0, y0
+
+                    x_first, y_first = 0, 0
                     for j in range(X_.shape[0]):
                         x = int(X_[j])
                         y = int(Y_[j])
+                        if j == 0:
+                            # первая точка прямой
+                            x_first, y_first = x, y
                         try:
                             if template[x, y] == 1:
                                 template[x, y] = COLOR_SCALE
+                                x0, y0 = x, y
                         except IndexError:
                             break
 
-            # kernel = np.ones((3,3), np.uint8)
-            kernel = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=np.uint8)
-            template = cv2.dilate(template, kernel, iterations=1)
-            template = cv2.morphologyEx(template, cv2.MORPH_CLOSE, kernel)
+                    # сшивка прямых
+                    if i != 0:
+                        # уравнение прямой сшивки
+                        k = (y_prev - y_first) / (x_prev - x_first + 1e-06)
+                        b = y_first - k * x_first
+                        X = np.linspace(x_prev, x_first, 20)
+                        Y = k * X + b
+                        X_ = np.around(X)
+                        Y_ = np.around(Y)
+                        for j in range(X_.shape[0]):
+                            x = int(X_[j])
+                            y = int(Y_[j])
+                            try:
+                                if template[x, y] == 1:
+                                    template[x, y] = COLOR_SCALE
+                            except IndexError:
+                                break
 
-            noise_img = template.copy()
-            mask = np.random.randint(0, 2, size=noise_img.shape).astype(np.bool)
-            mask[noise_img == 0] = False
-            r = np.random.poisson(lam=lam_poisson, size=noise_img.shape)
-            r[r == 0] = 1
-            r[r > 2] = 2
-            noise_img[mask] = r[mask]
+            synthesized_base[n] = [template, pattern_type]
 
-            #  kernel = np.ones((3,3), np.uint8)
-            kernel = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=np.uint8)
-            noise_img = cv2.morphologyEx(noise_img, cv2.MORPH_CLOSE, kernel)
-
-            synthesized_base[n] = [noise_img, pattern_type]
             # для презентации
             if save:
                 path = 'output/test_classes/{}'.format(pattern_type)
@@ -155,89 +144,110 @@ class SynthesizedDatabaseCreator(object):
                     os.mkdir(path)
                 except OSError:
                     pass
-                plt.imshow(noise_img, cmap='inferno')
+                plt.imshow(template, cmap='inferno')
                 name = '/{}{}.jpg'.format(pattern_type, n)
                 plt.savefig(path + name)
 
         return pd.DataFrame(synthesized_base, columns=['waferMap', 'failureType'])
 
-    def generator_scratch(self, mode=0, plot=False):
-        """
+    @staticmethod
+    def add_noise(template, pattern_type, lam_poisson=0.2, dilate_time=1):
+        # расширение по соседу
+        is_dilate = random.randint(-1, 1)
+        if is_dilate == 1 or pattern_type == 'scratch':
+            kernel1 = np.ones((3, 3), np.uint8)
+            kernel2 = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=np.uint8)
+            count_iter = random.randint(1, dilate_time)
+            template = cv2.dilate(template, kernel2, iterations=count_iter)
+            template = cv2.morphologyEx(template, cv2.MORPH_CLOSE, kernel2)
 
-        :param mode:
-        :param plot:
-        :return:
-        """
+        # внесем шум
+        noise_img = template.copy()
+        mask = np.random.randint(0, 2, size=noise_img.shape).astype(np.bool)
+        mask[noise_img == 0] = False
+        r = np.random.poisson(lam=lam_poisson, size=noise_img.shape)
+        # нормировка на величину шума
+        r[r == 0] = 1
+        r[r > 2] = 2
+        noise_img[mask] = r[mask]
+
+        # расширение
+        # kernel = np.ones((3, 3), np.uint8)
+        kernel = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=np.uint8)
+        noise_img = cv2.morphologyEx(noise_img, cv2.MORPH_CLOSE, kernel)
+
+    #     if pattern_type != 'scratch':
+    #         noise_img = cv2.erode(noise_img, kernel, iterations=1)
+
+        return noise_img
+
+    def generator_scratch(self, mode=0, plot=False, line_count=1, add_patterns=[None], is_noised=False):
         print('[INFO] Create scratches')
         # число синтезированных карт
         N_POINTS = self.number_points
+        line_part = 5  # сегментов в одной линии
 
         # суммарная длина отрезка
-        L0 = np.random.randint(0.4 * self.IMAGE_DIMS[0], 0.65 * self.IMAGE_DIMS[0], size=N_POINTS)
+        L0 = np.random.randint(0.2 * self.IMAGE_DIMS[0], 0.45 * self.IMAGE_DIMS[0], size=N_POINTS)
 
         # X координата старта прямой
-        XC = np.random.randint(0.2 * self.IMAGE_DIMS[0], 0.4 * self.IMAGE_DIMS[0], size=N_POINTS)
-        # смещение по x для старта следующей прямой
-        delta_xc = np.random.randint(0.02 * self.IMAGE_DIMS[0], 0.05 * self.IMAGE_DIMS[0], size=N_POINTS)
-        np.random.shuffle(delta_xc)
-        XC = np.vstack((XC, delta_xc))
+        xc = [np.random.randint(0.2 * self.IMAGE_DIMS[0], 0.5 * self.IMAGE_DIMS[0], size=N_POINTS)]
+        for _ in range(line_part - 1):
+            # смещение по x для старта следующей прямой
+            delta_xc = np.random.randint(0.01 * self.IMAGE_DIMS[0], 0.02 * self.IMAGE_DIMS[0] + 2, size=N_POINTS)
+            np.random.shuffle(delta_xc)
+            xc.append(delta_xc)
         # merge под формат генератора
-        xc = np.array([[XC[0, i], XC[1, i]] for i in range(XC.shape[1])])
+        xc = np.array(xc).T
+        np.random.shuffle(xc)
 
         # Y координата старта прямой
-        YC = np.random.randint(0.5 * self.IMAGE_DIMS[0], 0.7 * self.IMAGE_DIMS[0], size=N_POINTS)
-        # смещение по x для старта следующей прямой
-        delta_yc = np.random.randint(0.04 * self.IMAGE_DIMS[0], 0.09 * self.IMAGE_DIMS[0], size=N_POINTS)
-        np.random.shuffle(delta_yc)
-        YC = np.vstack((YC, delta_yc))
+        yc = [np.random.randint(0.3 * self.IMAGE_DIMS[0], 0.7 * self.IMAGE_DIMS[0], size=N_POINTS)]
+        for _ in range(line_part - 1):
+            # смещение по x для старта следующей прямой
+            delta_yc = np.random.randint(0.01 * self.IMAGE_DIMS[0], 0.02 * self.IMAGE_DIMS[0] + 2, size=N_POINTS)
+            np.random.shuffle(delta_yc)
+            yc.append(delta_yc)
         # merge под формат генератора
-        yc = np.array([[YC[0, i], YC[1, i]] for i in range(YC.shape[1])])
+        yc = np.array(yc).T
+        np.random.shuffle(yc)
 
         # углы наклона для каждого отрезка
-        angle1 = np.random.randint(-34, -10, size=N_POINTS) * np.pi / 180
-        angle2 = np.random.randint(-34, -25, size=N_POINTS) * np.pi / 180
-        angle = np.vstack((angle1, angle2))
-        angle = np.array([[angle[0, i], angle[1, i]] for i in range(angle.shape[1])])
-
-        PHI = None
-        for i in range(4):
-            # угол старта для сектора
-            phi1 = np.random.uniform(45 * i, 30 * (i + 1), size=N_POINTS // 4) * np.pi / 180
-            # угол конца для сектора
-            phi2 = np.random.uniform(30 * (i + 1), 60 * (i + 1), size=N_POINTS // 4) * np.pi / 180
-            phi = np.vstack((phi1, phi2))
-            # merge под формат генератора
-            phi = np.array([[phi[0, j], phi[1, j]] for j in range(phi.shape[1])])
-            if i == 0:
-                PHI = phi
-            else:
-                PHI = np.vstack((PHI, phi))
+        angle = [np.random.randint(-50, 50, size=N_POINTS) * np.pi / 180]
+        for _ in range(line_part - 1):
+            part_angle = np.random.randint(30, 40, size=N_POINTS) * np.pi / 180 * np.sign(angle[0])
+            angle.append(part_angle)
+        angle = np.array(angle).T
+        np.random.shuffle(angle)
 
         df_scratch_curved = None
-        if mode == 1:
-            # генератор для презенташки
-            df_scratch_curved = self.sawtooth_line(xc, yc, L0, angle,
-                                                   pattern_type='Scratch', line_count=2,
-                                                   lam_poisson=0.7, save=False)
-        elif mode == 0:
+        if mode == 0:
             # генератор параллельный
             n_workers = self.cpu_count
             results = Parallel(n_workers)(
                 delayed(self.sawtooth_line)(xc[i::n_workers], yc[i::n_workers],
-                                            L0[i::n_workers], angle[i::n_workers],
-                                            pattern_type='Scratch', line_count=2)
+                                       L0[i::n_workers], angle[i::n_workers],
+                                       pattern_type='Scratch',
+                                       line_count=line_count,
+                                       add_patterns=add_patterns)
                 for i in range(n_workers))
 
             df_scratch_curved = results[0]
             for i in range(1, len(results)):
                 df_scratch_curved = pd.concat((df_scratch_curved, results[i]), sort=False)
 
+        if is_noised:
+            df_scratch_curved.waferMap = df_scratch_curved.waferMap.map(lambda wafer_map:
+                                                                        self.add_noise(wafer_map,
+                                                                                       pattern_type='scratch',
+                                                                                       lam_poisson=0.3))
+
         if plot:
-            fig, ax = plt.subplots(nrows=10, ncols=10, figsize=(10, 8))
+            fig, ax = plt.subplots(nrows=10, ncols=10, figsize=(15, 10))
             ax = ax.ravel(order='C')
             sample_idx = np.random.choice(N_POINTS, 100)
-            for i, id in enumerate(sample_idx):
-                ax[i].imshow(df_scratch_curved.waferMap.values[id], cmap='inferno')
+            for i, idx in enumerate(sample_idx):
+                ax[i].imshow(df_scratch_curved.waferMap.values[idx], cmap='inferno')
                 ax[i].axis('off')
             fig.suptitle('Synthesized scratches')
             plt.show()
@@ -246,22 +256,20 @@ class SynthesizedDatabaseCreator(object):
 
         return df_scratch_curved
 
-    def create_rings(self, XC, YC, R_, PHI, N, pattern_type, lam_poisson=1.2, save=False):
-        """
-
-        :param YC:
-        :param R_:
-        :param PHI:
-        :param N:
-        :param pattern_type:
-        :param lam_poisson:
-        :param save:
-        :return:
-        """
+    def create_rings(self, XC, YC, R_, PHI, N, pattern_type, lam_poisson=1.2, save=False, add_patterns=[None]):
+        color_scale = 2
         size = XC.shape[0]
         synthesized_base = [None] * size
 
         for n in tqdm(range(size)):
+            # тестовый полигон
+            template = deepcopy(self.template_map)
+
+            if add_patterns[0]:
+                for pattern in add_patterns:
+                    for img_pattern in pattern:
+                        template = self.add_pattern(template, img_pattern)
+
             # параметры кольца
             phi = np.linspace(PHI[n][0], PHI[n][1], N[n])
             r = np.linspace(R_[n][0], R_[n][1], N[n])
@@ -283,46 +291,17 @@ class SynthesizedDatabaseCreator(object):
                     y = Y_[i, j]
                     points.append((x, y))
 
-            # тестовый полигон
-            template = self.template_map.copy()
-            COLOR_SCALE = 2
-
             for idx in points:
                 i, j = idx
                 i = int(round(i))
                 j = int(round(j))
                 try:
                     if template[i, j] == 1:
-                        template[i, j] = COLOR_SCALE
+                        template[i, j] = color_scale
                 except IndexError:
                     break
 
-            is_dilate = random.randint(-1, 1)
-            if is_dilate == 1:
-                # сверткой расширим
-                kernel = np.ones((3, 3), np.uint8)
-                kernel = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=np.uint8)
-                count_iter = random.randint(1, 3)
-                template = cv2.dilate(template, kernel, iterations=count_iter)
-                template = cv2.morphologyEx(template, cv2.MORPH_CLOSE, kernel)
-
-            # внесем шум
-            noise_img = template.copy()
-            mask = np.random.randint(0, 2, size=noise_img.shape).astype(np.bool)
-            mask[noise_img == 0] = False
-            r = np.random.poisson(lam=lam_poisson, size=noise_img.shape)
-            # нормировка на шумы
-            r[r == 0] = 1
-            r[r > 2] = 2
-            noise_img[mask] = r[mask]
-
-            # сверткой расширим
-            # kernel = np.ones((3, 3), np.uint8)
-            kernel = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=np.uint8)
-            noise_img = cv2.morphologyEx(noise_img, cv2.MORPH_CLOSE, kernel)
-            noise_img = cv2.erode(noise_img, kernel, iterations=1)
-
-            synthesized_base[n] = [noise_img, pattern_type]
+            synthesized_base[n] = [template, pattern_type]
 
             # для презентации
             if save:
@@ -331,20 +310,14 @@ class SynthesizedDatabaseCreator(object):
                     os.mkdir(path)
                 except OSError:
                     pass
-                plt.imshow(noise_img, cmap='inferno')
+                plt.imshow(template, cmap='inferno')
                 name = '/{}{}.jpg'.format(pattern_type, n)
                 plt.savefig(path + name)
 
         return pd.DataFrame(synthesized_base, columns=['waferMap', 'failureType'])
 
-    def generator_rings(self, mode=0, plot=False):
-        """
-
-        :param mode:
-        :param plot:
-        :return:
-        """
-        print('[INFO] Create rings')
+    def generator_donut(self, mode=0, plot=False, add_patterns=None, is_noised=False):
+        print('[INFO] Create donuts')
         # число синтезированных карт
         N_POINTS = self.number_points
 
@@ -353,7 +326,7 @@ class SynthesizedDatabaseCreator(object):
             # угол старта для сектора
             phi1 = np.random.uniform(0 + 95 * i, 30 + 95 * i, size=N_POINTS // 4) * np.pi / 180
             # угол конца для сектора
-            phi2 = np.random.uniform(320 + 90 * i, 360 * (i + 1), size=N_POINTS // 4) * np.pi / 180
+            phi2 = np.random.uniform(180 + 90 * i, 360 * (i + 1), size=N_POINTS // 4) * np.pi / 180
             phi = np.vstack((phi1, phi2))
             # merge под формат генератора
             phi = np.array([[phi[0, j], phi[1, j]] for j in range(phi.shape[1])])
@@ -363,45 +336,49 @@ class SynthesizedDatabaseCreator(object):
                 PHI = np.vstack((PHI, phi))
 
         # радиус внутреннего круга
-        r1 = np.random.randint(0.24 * self.IMAGE_DIMS[0], 0.26 * self.IMAGE_DIMS[0], size=N_POINTS)
+        r1 = np.random.randint(0.15 * self.IMAGE_DIMS[0], 0.3 * self.IMAGE_DIMS[0], size=N_POINTS)
         # радиус внешнего круга
-        r2 = np.random.randint(0.3 * self.IMAGE_DIMS[0], 0.35 * self.IMAGE_DIMS[0], size=N_POINTS)
+        r2 = np.random.randint(0.33 * self.IMAGE_DIMS[0], 0.4 * self.IMAGE_DIMS[0], size=N_POINTS)
         r = np.vstack((r1, r2))
         # merge под формат генератора
         r = np.array([[r[0, i], r[1, i]] for i in range(r.shape[1])])
 
         # X координата старта прямой
-        XC = np.random.randint(0.22 * self.IMAGE_DIMS[0], 0.65 * self.IMAGE_DIMS[0], size=N_POINTS)
+        XC = np.random.randint(0.45 * self.IMAGE_DIMS[0], 0.55 * self.IMAGE_DIMS[0], size=N_POINTS)
         # Y координата старта прямой
-        YC = np.random.randint(0.22 * self.IMAGE_DIMS[0], 0.65 * self.IMAGE_DIMS[0], size=N_POINTS)
+        YC = np.random.randint(0.45 * self.IMAGE_DIMS[0], 0.55 * self.IMAGE_DIMS[0], size=N_POINTS)
 
         # интесивность
         N = np.random.randint(200, 210, size=N_POINTS)
 
         df_donut = None
-        if mode == 1:
-            # генератор для презенташки
-            df_donut = self.create_rings(XC, YC, r, PHI, N, pattern_type='Donut', save=True, lam_poisson=1.7)
-
-        elif mode == 0:
+        if mode == 0:
             # генератор параллельный
             n_workers = self.cpu_count
             results = Parallel(n_workers)(
                 delayed(self.create_rings)(XC[i::n_workers], YC[i::n_workers],
                                       r[i::n_workers], PHI[i::n_workers],
-                                      N[i::n_workers], pattern_type='Donut')
+                                      N[i::n_workers], pattern_type='Donut',
+                                      add_patterns=add_patterns)
                 for i in range(n_workers))
 
             df_donut = results[0]
             for i in range(1, len(results)):
                 df_donut = pd.concat((df_donut, results[i]), sort=False)
 
+        if is_noised:
+            df_donut.waferMap = df_donut.waferMap.map(lambda wafer_map:
+                                                      self.add_noise(wafer_map,
+                                                                     pattern_type='donut',
+                                                                     lam_poisson=0.9,
+                                                                     dilate_time=4))
+
         if plot:
             fig, ax = plt.subplots(nrows=10, ncols=10, figsize=(10, 8))
             ax = ax.ravel(order='C')
             sample_idx = np.random.choice(N_POINTS, 100)
-            for i, id in enumerate(sample_idx):
-                ax[i].imshow(df_donut.waferMap.values[id], cmap='inferno')
+            for i, idx in enumerate(sample_idx):
+                ax[i].imshow(df_donut.waferMap.values[idx], cmap='inferno')
                 ax[i].axis('off')
             fig.suptitle('Synthesized scratches')
             plt.show()
@@ -410,13 +387,7 @@ class SynthesizedDatabaseCreator(object):
 
         return df_donut
 
-    def generator_loc(self, mode=0, plot=False):
-        """
-
-        :param mode:
-        :param plot:
-        :return:
-        """
+    def generator_loc(self, mode=0, plot=False, add_patterns=[None], is_noised=True):
         print('[INFO] Create loc')
         # число синтезированных карт
         N_POINTS = self.number_points
@@ -460,20 +431,27 @@ class SynthesizedDatabaseCreator(object):
             n_workers = self.cpu_count
             results = Parallel(n_workers)(
                 delayed(self.create_rings)(XC[i::n_workers], YC[i::n_workers],
-                                      r[i::n_workers], PHI[i::n_workers],
-                                      N[i::n_workers], pattern_type='Loc')
+                                           r[i::n_workers], PHI[i::n_workers],
+                                           N[i::n_workers], pattern_type='Loc',
+                                           add_patterns=add_patterns)
                 for i in range(n_workers))
 
             df_loc = results[0]
             for i in range(1, len(results)):
                 df_loc = pd.concat((df_loc, results[i]), sort=False)
 
+        if is_noised:
+            df_loc.waferMap = df_loc.waferMap.map(lambda wafer_map:
+                                                  self.add_noise(wafer_map,
+                                                                 pattern_type='scratch',
+                                                                 lam_poisson=0.3))
+
         if plot:
             fig, ax = plt.subplots(nrows=10, ncols=10, figsize=(10, 8))
             ax = ax.ravel(order='C')
             sample_idx = np.random.choice(N_POINTS, 100)
-            for i, id in enumerate(sample_idx):
-                ax[i].imshow(df_loc.waferMap.values[id], cmap='inferno')
+            for i, idx in enumerate(sample_idx):
+                ax[i].imshow(df_loc.waferMap.values[idx], cmap='inferno')
                 ax[i].axis('off')
             fig.suptitle('Synthesized scratches')
             plt.show()
@@ -482,13 +460,7 @@ class SynthesizedDatabaseCreator(object):
 
         return df_loc
 
-    def generator_center(self, mode=0, plot=False):
-        """
-
-        :param mode:
-        :param plot:
-        :return:
-        """
+    def generator_center(self, mode=0, plot=False, add_patterns=[None], is_noised=True):
         print('[INFO] Create center')
         # число синтезированных карт
         N_POINTS = self.number_points
@@ -531,20 +503,27 @@ class SynthesizedDatabaseCreator(object):
             n_workers = self.cpu_count
             results = Parallel(n_workers)(
                 delayed(self.create_rings)(XC[i::n_workers], YC[i::n_workers],
-                                      r[i::n_workers], PHI[i::n_workers],
-                                      N[i::n_workers], pattern_type='Center')
+                                           r[i::n_workers], PHI[i::n_workers],
+                                           N[i::n_workers], pattern_type='Center',
+                                           add_patterns=add_patterns)
                 for i in range(n_workers))
 
             df_center = results[0]
             for i in range(1, len(results)):
                 df_center = pd.concat((df_center, results[i]), sort=False)
 
+        if is_noised:
+            df_center.waferMap = df_center.waferMap.map(lambda wafer_map:
+                                                        self.add_noise(wafer_map,
+                                                                       pattern_type='scratch',
+                                                                       lam_poisson=0.3))
+
         if plot:
             fig, ax = plt.subplots(nrows=10, ncols=10, figsize=(10, 8))
             ax = ax.ravel(order='C')
             sample_idx = np.random.choice(N_POINTS, 100)
-            for i, id in enumerate(sample_idx):
-                ax[i].imshow(df_center.waferMap.values[id], cmap='inferno')
+            for i, idx in enumerate(sample_idx):
+                ax[i].imshow(df_center.waferMap.values[idx], cmap='inferno')
                 ax[i].axis('off')
             fig.suptitle('Synthesized scratches')
             plt.show()
@@ -553,13 +532,7 @@ class SynthesizedDatabaseCreator(object):
 
         return df_center
 
-    def generator_edge_ring(self, mode=0, plot=False):
-        """
-
-        :param mode:
-        :param plot:
-        :return:
-        """
+    def generator_edge_ring(self, mode=0, plot=False, add_patterns=[None], is_noised=True):
         print('[INFO] Create edge_ring')
         # число синтезированных карт
         N_POINTS = self.number_points
@@ -602,20 +575,27 @@ class SynthesizedDatabaseCreator(object):
             n_workers = self.cpu_count
             results = Parallel(n_workers)(
                 delayed(self.create_rings)(XC[i::n_workers], YC[i::n_workers],
-                                      r[i::n_workers], PHI[i::n_workers],
-                                      N[i::n_workers], pattern_type='Edge-Ring')
+                                           r[i::n_workers], PHI[i::n_workers],
+                                           N[i::n_workers], pattern_type='Edge-Ring',
+                                           add_patterns=add_patterns)
                 for i in range(n_workers))
 
             df_edge_ring = results[0]
             for i in range(1, len(results)):
                 df_edge_ring = pd.concat((df_edge_ring, results[i]), sort=False)
 
+        if is_noised:
+            df_edge_ring.waferMap = df_edge_ring.waferMap.map(lambda wafer_map:
+                                                              self.add_noise(wafer_map,
+                                                                             pattern_type='scratch',
+                                                                             lam_poisson=0.3))
+
         if plot:
             fig, ax = plt.subplots(nrows=10, ncols=10, figsize=(10, 8))
             ax = ax.ravel(order='C')
             sample_idx = np.random.choice(N_POINTS, 100)
-            for i, id in enumerate(sample_idx):
-                ax[i].imshow(df_edge_ring.waferMap.values[id], cmap='inferno')
+            for i, idx in enumerate(sample_idx):
+                ax[i].imshow(df_edge_ring.waferMap.values[idx], cmap='inferno')
                 ax[i].axis('off')
             fig.suptitle('Synthesized scratches')
             plt.show()
@@ -624,13 +604,7 @@ class SynthesizedDatabaseCreator(object):
 
         return df_edge_ring
 
-    def generator_edge_loc(self, mode=0, plot=False):
-        """
-
-        :param mode:
-        :param plot:
-        :return:
-        """
+    def generator_edge_loc(self, mode=0, plot=False, add_patterns=[None], is_noised=True):
         print('[INFO] Create edge_ring')
         # число синтезированных карт
         N_POINTS = self.number_points
@@ -672,20 +646,27 @@ class SynthesizedDatabaseCreator(object):
             n_workers = self.cpu_count
             results = Parallel(n_workers)(
                 delayed(self.create_rings)(XC[i::n_workers], YC[i::n_workers],
-                                      r[i::n_workers], PHI[i::n_workers],
-                                      N[i::n_workers], pattern_type='Edge-Loc')
+                                           r[i::n_workers], PHI[i::n_workers],
+                                           N[i::n_workers], pattern_type='Edge-Loc',
+                                           add_patterns=add_patterns)
                 for i in range(n_workers))
 
             df_edge_loc = results[0]
             for i in range(1, len(results)):
                 df_edge_loc = pd.concat((df_edge_loc, results[i]), sort=False)
 
+        if is_noised:
+            df_edge_loc.waferMap = df_edge_loc.waferMap.map(lambda wafer_map:
+                                                            self.add_noise(wafer_map,
+                                                                           pattern_type='scratch',
+                                                                           lam_poisson=0.3))
+
         if plot:
             fig, ax = plt.subplots(nrows=10, ncols=10, figsize=(10, 8))
             ax = ax.ravel(order='C')
             sample_idx = np.random.choice(N_POINTS, 100)
-            for i, id in enumerate(sample_idx):
-                ax[i].imshow(df_edge_loc.waferMap.values[id], cmap='inferno')
+            for i, idx in enumerate(sample_idx):
+                ax[i].imshow(df_edge_loc.waferMap.values[idx], cmap='inferno')
                 ax[i].axis('off')
             fig.suptitle('Synthesized scratches')
             plt.show()
@@ -694,22 +675,14 @@ class SynthesizedDatabaseCreator(object):
 
         return df_edge_loc
 
-    def create_near_full(self, N, pattern_type, lam_poisson=1.2, save=False):
-        """
-
-        :param pattern_type:
-        :param lam_poisson:
-        :param save:
-        :return:
-        """
-        synthesized_base = [None] * N
-        for n in range(N):
+    def create_near_full(self, capacity, pattern_type, lam_poisson=1.2, save=False):
+        synthesized_base = [None] * capacity
+        for step in range(capacity):
             # тестовый полигон
-            template = self.template_map
-            COLOR_SCALE = 5
+            template = deepcopy(self.template_map)
 
             # внесем шум
-            noise_img = template.copy()
+            noise_img = deepcopy(template)
             mask = np.random.randint(0, 2, size=noise_img.shape).astype(np.bool)
             mask[noise_img == 0] = False
             r = np.random.poisson(lam=lam_poisson, size=noise_img.shape)
@@ -726,7 +699,7 @@ class SynthesizedDatabaseCreator(object):
             noise_img = cv2.morphologyEx(noise_img, cv2.MORPH_CLOSE, kernel)
             noise_img = cv2.erode(noise_img, kernel, iterations=1)
 
-            synthesized_base[n] = [noise_img, pattern_type]
+            synthesized_base[step] = [noise_img, pattern_type]
 
             # для презенташки
             if save:
@@ -736,17 +709,12 @@ class SynthesizedDatabaseCreator(object):
                 except OSError:
                     pass
                 plt.imshow(noise_img, cmap='inferno')
-                name = '/{}{}.jpg'.format(pattern_type, n)
+                name = '/{}{}.jpg'.format(pattern_type, step)
                 plt.savefig(path + name)
 
         return pd.DataFrame(synthesized_base, columns=['waferMap', 'failureType'])
 
     def generator_near_full(self, plot=False):
-        """
-
-        :param plot:
-        :return:
-        """
         print('[INFO] Create near_full')
         # число синтезированных карт
         N_POINTS = self.number_points
@@ -757,8 +725,8 @@ class SynthesizedDatabaseCreator(object):
             fig, ax = plt.subplots(nrows=10, ncols=10, figsize=(10, 8))
             ax = ax.ravel(order='C')
             sample_idx = np.random.choice(N_POINTS, 100)
-            for i, id in enumerate(sample_idx):
-                ax[i].imshow(df_near_full.waferMap.values[id], cmap='inferno')
+            for i, idx in enumerate(sample_idx):
+                ax[i].imshow(df_near_full.waferMap.values[idx], cmap='inferno')
                 ax[i].axis('off')
             fig.suptitle('Synthesized scratches')
             plt.show()
@@ -767,23 +735,14 @@ class SynthesizedDatabaseCreator(object):
 
         return df_near_full
 
-    def create_random(self, N, pattern_type, lam_poisson=1.2, save=False):
-        """
-
-        :param N:
-        :param pattern_type:
-        :param lam_poisson:
-        :param save:
-        :return:
-        """
-        synthesized_base = [None] * N
-        for n in tqdm(range(N)):
+    def create_random(self, capacity, pattern_type, lam_poisson=1.2, save=False):
+        synthesized_base = [None] * capacity
+        for step in tqdm(range(capacity)):
             # тестовый полигон
-            template = self.template_map
-            COLOR_SCALE = 5
+            template = deepcopy(self.template_map)
 
-            ## внесем шум
-            noise_img = template.copy()
+            # внесем шум
+            noise_img = deepcopy(template)
             mask = np.random.randint(0, 2, size=noise_img.shape).astype(np.bool)
             mask[noise_img == 0] = False
             r = np.random.poisson(lam=lam_poisson, size=noise_img.shape)
@@ -793,33 +752,28 @@ class SynthesizedDatabaseCreator(object):
             r[r > 2] = 2
             noise_img[mask] = r[mask]
 
-            ## сверткой расширим
+            # сверткой расширим
             kernel = np.ones((3, 3), np.uint8)
             kernel = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=np.uint8)
             noise_img = cv2.morphologyEx(noise_img, cv2.MORPH_CLOSE, kernel)
             noise_img = cv2.erode(noise_img, kernel, iterations=1)
 
-            synthesized_base[n] = [noise_img, pattern_type]
+            synthesized_base[step] = [noise_img, pattern_type]
 
-            ## для презенташки
-            if save == True:
+            # для презенташки
+            if save:
                 path = 'output/test_classes/{}'.format(pattern_type)
                 try:
                     os.mkdir(path)
                 except OSError:
                     pass
                 plt.imshow(noise_img, cmap='inferno')
-                name = '/{}{}.jpg'.format(pattern_type, n)
+                name = '/{}{}.jpg'.format(pattern_type, step)
                 plt.savefig(path + name)
 
         return pd.DataFrame(synthesized_base, columns=['waferMap', 'failureType'])
 
     def generator_random(self, plot=False):
-        """
-
-        :param plot:
-        :return:
-        """
         print('[INFO] Create random')
         # число синтезированных карт
         N_POINTS = self.number_points
@@ -841,18 +795,16 @@ class SynthesizedDatabaseCreator(object):
         return df_random
 
     def create_synthesized_database(self):
-        """
+        df_scratch_curved = [self.generator_scratch(mode=0, plot=False, line_count=i+1,
+                                                    add_patterns=[None], is_noised=True)
+                             for i in range(4)]
+        df_scratch_curved = pd.concat(df_scratch_curved, ignore_index=True)
 
-        :param synthesized_path_name:
-        :return:
-        """
-
-        df_scratch_curved = self.generator_scratch(mode=0)
-        df_donut = self.generator_rings(mode=0)
-        df_loc = self.generator_loc(mode=0)
-        df_center = self.generator_center(mode=0)
-        df_edge_ring = self.generator_edge_ring(mode=0)
-        df_edge_loc = self.generator_edge_loc(mode=0)
+        df_donut = self.generator_donut(mode=0, plot=False, add_patterns=[None], is_noised=True)
+        df_loc = self.generator_loc(mode=0, plot=False, add_patterns=[None], is_noised=True)
+        df_center = self.generator_center(mode=0, plot=False, add_patterns=[None], is_noised=True)
+        df_edge_ring = self.generator_edge_ring(mode=0, plot=False, add_patterns=[None], is_noised=True)
+        df_edge_loc = self.generator_edge_loc(mode=0, plot=False, add_patterns=[None], is_noised=True)
         df_random = self.generator_random()
 
         df = pd.concat([df_center, df_donut, df_edge_loc,
@@ -1044,8 +996,8 @@ class WaferDataset(Dataset):
 
 if __name__ == '__main__':
 
-    args = {'example_number': 30000,
-            'synthesized_path_name': 'synthesized_database_210000.pkl',  # ex_num * 7
+    args = {'example_number': 5000,
+            'synthesized_path_name': 'synthesized_database_35000_v1.pkl',  # ex_num * 7
             'image_dims': (96, 96, 1)}
 
     create_data = SynthesizedDatabaseCreator(**args)
