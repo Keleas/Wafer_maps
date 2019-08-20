@@ -314,16 +314,16 @@ class TrainModel(object):
         self.load_data()  # train/val/test loaders
 
         # Start train loop
-        # self.start_train()
+        self.start_train()
 
         # # Get train results
-        self.plot_errors(model_name='model_96_ResNet170')
+        self.plot_errors()
 
         return True
 
 
 parser = argparse.ArgumentParser(description='')
-parser.add_argument('--model', default='ResNet17', type=str, help='Model version')
+parser.add_argument('--model', default='ResNet17_pretrain', type=str, help='Model version')
 parser.add_argument('--fine_size', default=96, type=int, help='Resized image size')
 parser.add_argument('--pad_left', default=0, type=int, help='Left padding size')
 parser.add_argument('--pad_right', default=0, type=int, help='Right padding size')
@@ -338,7 +338,7 @@ parser.add_argument('--momentum', default=0.9, type=float, help='momentum for SG
 parser.add_argument('--weight_decay', default=1e-4, type=float, help='Weight decay for SGD')
 parser.add_argument('--patience', default=60, type=int, help='Number of epoch waiting for best score')
 
-parser.add_argument('--synth_name', default='synthesized_test_database.pkl', type=str, help='Synthesized path name')
+parser.add_argument('--synth_name', default='synthesized_database_35000_v1.pkl', type=str, help='Synthesized path name')
 parser.add_argument('--center_rate', default=0.1, type=float, help='Center rate of real data')
 parser.add_argument('--donut_rate', default=0.1, type=float, help='Center rate of real data')
 parser.add_argument('--edge_loc_rate', default=0.1, type=float, help='Edge-Loc rate of real data')
