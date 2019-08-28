@@ -167,7 +167,7 @@ class TrainModel(object):
 
             if early_stopping.early_stop:
                 print("Early stopping")
-                print(f"Early stop at {epoch} epoch")
+                # print(f"Early stop at {epoch} epoch")
                 return
 
     def load_data(self):
@@ -177,11 +177,12 @@ class TrainModel(object):
                                                   'Edge-Loc': args.edge_loc_rate,
                                                   'Edge-Ring': args.edge_ring_rate,
                                                   'Loc': args.loc_rate,
-                                                  'Random': args.random_rate,
                                                   'Scratch': args.scratch_rate}
                           }
         data = TrainingDatabaseCreator()
         train, test, val = data.make_training_database(**args_make_data)
+
+        print(np.unique(train.failureNum.values))
 
         train_data = WaferDataset(list(train.waferMap.values),
                                   mode='train', label_list=list(train.failureNum.values),
@@ -192,7 +193,7 @@ class TrainModel(object):
         self.train_loader = DataLoader(train_data,
                                        shuffle=RandomSampler(train_data),
                                        batch_size=args.batch_size,
-                                       num_workers=5,
+                                       num_workers=6,
                                        pin_memory=True)
 
         val_data = WaferDataset(list(val.waferMap.values),
@@ -204,7 +205,7 @@ class TrainModel(object):
         self.val_loader = DataLoader(val_data,
                                      shuffle=RandomSampler(train_data),
                                      batch_size=args.batch_size,
-                                     num_workers=5,
+                                     num_workers=6,
                                      pin_memory=True)
 
         test_data = WaferDataset(list(test.waferMap.values),
@@ -216,7 +217,7 @@ class TrainModel(object):
         self.test_loader = DataLoader(test_data,
                                       shuffle=RandomSampler(train_data),
                                       batch_size=args.batch_size,
-                                      num_workers=5,
+                                      num_workers=6,
                                       pin_memory=True)
 
         return True
@@ -280,8 +281,7 @@ class TrainModel(object):
 
         _, axes = plt.subplots(nrows=1, ncols=2, figsize=(15, 6))
         types = ['Center', 'Donut', 'Edge-Loc',
-                 'Edge-Ring', 'Loc', 'Random',
-                 'Scratch']
+                 'Edge-Ring', 'Loc', 'Scratch']
         l = np.arange(len(types))
         for ax in axes:
             ax.set_yticks(l)
@@ -300,51 +300,53 @@ class TrainModel(object):
         if not os.path.isdir('output/confusion_matrix/'):
             os.mkdir('output/confusion_matrix/')
 
-        plt.savefig('output/confusion_matrix/' + args.weight_name + '.jpg')
+        if model_name:
+            plt.savefig('output/confusion_matrix/' + model_name + '.png')
+        else:
+            plt.savefig('output/confusion_matrix/' + args.weight_name + '.png')
         plt.show()
 
         return True
 
     def main(self):
         # Get Model
-        self.model = models.ResNet(17)
+        self.model = models.ResNet(18)
         self.model.to(device)
 
         # Get Data
         self.load_data()  # train/val/test loaders
 
         # Start train loop
-        self.start_train()
+        # self.start_train()
 
-        # # Get train results
-        self.plot_errors()
+        # Get train results
+        # self.plot_errors(model_name='model_96_ResNet1710')
 
         return True
 
 
 parser = argparse.ArgumentParser(description='')
-parser.add_argument('--model', default='ResNet17_pretrain', type=str, help='Model version')
+parser.add_argument('--model', default='ResNet18_v30000', type=str, help='Model version')
 parser.add_argument('--fine_size', default=96, type=int, help='Resized image size')
 parser.add_argument('--pad_left', default=0, type=int, help='Left padding size')
 parser.add_argument('--pad_right', default=0, type=int, help='Right padding size')
-parser.add_argument('--batch_size', default=30, type=int, help='Batch size for training')
-parser.add_argument('--epoch', default=300, type=int, help='Number of training epochs')
-parser.add_argument('--snapshot', default=10, type=int, help='Number of snapshots per fold')
+parser.add_argument('--batch_size', default=32, type=int, help='Batch size for training')
+parser.add_argument('--epoch', default=100, type=int, help='Number of training epochs')
+parser.add_argument('--snapshot', default=20, type=int, help='Number of snapshots per fold')
 parser.add_argument('--cuda', default=True, type=bool, help='Use cuda to train model')
 parser.add_argument('--save_weight', default='output/weights/', type=str, help='weight save space')
 parser.add_argument('--max_lr', default=0.01, type=float, help='max learning rate')
 parser.add_argument('--min_lr', default=0.001, type=float, help='min learning rate')
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum for SGD')
-parser.add_argument('--weight_decay', default=1e-4, type=float, help='Weight decay for SGD')
-parser.add_argument('--patience', default=60, type=int, help='Number of epoch waiting for best score')
+parser.add_argument('--weight_decay', default=5e-4, type=float, help='Weight decay for SGD')
+parser.add_argument('--patience', default=40, type=int, help='Number of epoch waiting for best score')
 
-parser.add_argument('--synth_name', default='synthesized_database_35000_v1.pkl', type=str, help='Synthesized path name')
+parser.add_argument('--synth_name', default='synthesized_database_30000_v1.pkl', type=str, help='Synthesized path name')
 parser.add_argument('--center_rate', default=0.1, type=float, help='Center rate of real data')
 parser.add_argument('--donut_rate', default=0.1, type=float, help='Center rate of real data')
 parser.add_argument('--edge_loc_rate', default=0.1, type=float, help='Edge-Loc rate of real data')
 parser.add_argument('--edge_ring_rate', default=0.1, type=float, help='Edge-Ring rate of real data')
 parser.add_argument('--loc_rate', default=0.1, type=float, help='Loc rate of real data')
-parser.add_argument('--random_rate', default=0.1, type=float, help='Random rate of real data')
 parser.add_argument('--scratch_rate', default=0.1, type=float, help='Scratch rate of real data')
 
 args = parser.parse_args()

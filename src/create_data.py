@@ -31,7 +31,7 @@ class SynthesizedDatabaseCreator(object):
     def __init__(self, example_number, synthesized_path_name, image_dims):
         self.IMAGE_DIMS = image_dims
         self.number_points = example_number
-        self.cpu_count = cpu_count() - 1
+        self.cpu_count = 4
         self.synthesized_path_name = synthesized_path_name
 
         def add_pattern(cur_x, add_x):
@@ -805,15 +805,12 @@ class SynthesizedDatabaseCreator(object):
         df_center = self.generator_center(mode=0, plot=False, add_patterns=[None], is_noised=True)
         df_edge_ring = self.generator_edge_ring(mode=0, plot=False, add_patterns=[None], is_noised=True)
         df_edge_loc = self.generator_edge_loc(mode=0, plot=False, add_patterns=[None], is_noised=True)
-        df_random = self.generator_random()
 
         df = pd.concat([df_center, df_donut, df_edge_loc,
-                        df_edge_ring, df_loc,
-                        df_random, df_scratch_curved], sort=False)
+                        df_edge_ring, df_loc, df_scratch_curved], sort=False)
 
         mapping_type = {'Center': 0, 'Donut': 1, 'Edge-Loc': 2,
-                        'Edge-Ring': 3, 'Loc': 4, 'Random': 5,
-                        'Scratch': 6}
+                        'Edge-Ring': 3, 'Loc': 4, 'Scratch': 5}
 
         df['failureNum'] = df.failureType
         df = df.replace({'failureNum': mapping_type})
@@ -847,12 +844,12 @@ class TrainingDatabaseCreator(object):
                   'Loading full database...')
             full_real_database = pd.read_pickle(self.full_database_path)
             mapping_type = {'Center': 0, 'Donut': 1, 'Edge-Loc': 2,
-                            'Edge-Ring': 3, 'Loc': 4, 'Random': 5,
-                            'Scratch': 6, 'Near-full': 7, 'none': 8}
+                            'Edge-Ring': 3, 'Loc': 4, 'Scratch': 5,
+                            'Random': 6, 'Near-full': 7, 'none': 8}
             full_real_database['failureNum'] = full_real_database.failureType
             full_real_database = full_real_database.replace({'failureNum': mapping_type})
             full_real_database = full_real_database[(full_real_database['failureNum'] >= 0) &
-                                                    (full_real_database['failureNum'] <= 6)]
+                                                    (full_real_database['failureNum'] <= 5)]
             full_real_database = full_real_database.reset_index()
             full_real_database = full_real_database.drop(labels=['dieSize', 'lotName', 'waferIndex',
                                                                  'trianTestLabel', 'index'], axis=1)
@@ -871,9 +868,6 @@ class TrainingDatabaseCreator(object):
                     out_class += [waf_type[0][0]]
 
             database = pd.DataFrame(data=np.vstack((out_map, out_class)).T, columns=['waferMap', 'failureType'])
-            mapping_type = {'Center': 0, 'Donut': 1, 'Edge-Loc': 2,
-                            'Edge-Ring': 3, 'Loc': 4, 'Random': 5,
-                            'Scratch': 6, 'Near-full': 7, 'none': 8}
             database['failureNum'] = database.failureType
             database = database.replace({'failureNum': mapping_type})
 
@@ -997,7 +991,7 @@ class WaferDataset(Dataset):
 if __name__ == '__main__':
 
     args = {'example_number': 5000,
-            'synthesized_path_name': 'synthesized_database_35000_v1.pkl',  # ex_num * 7
+            'synthesized_path_name': 'synthesized_database_30000_v1.pkl',  # ex_num * 6
             'image_dims': (96, 96, 1)}
 
     create_data = SynthesizedDatabaseCreator(**args)
@@ -1009,7 +1003,6 @@ if __name__ == '__main__':
     #                                 'Edge-Loc': 0.0,
     #                                 'Edge-Ring': 0.0,
     #                                 'Loc': 0.0,
-    #                                 'Random': 0.0,
     #                                 'Scratch': 0.0}
     #         }
     # data = TrainingDatabaseCreator()

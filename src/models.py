@@ -72,7 +72,7 @@ class BN_LeNet(nn.Module):
         self.dense_1 = nn.Linear(144 * 100, 500)  # Fully-connected layer, 500 outputs
         # input features = (32/2**(num MaxPool layers))*(num previous output channels)
         self.bn_4 = nn.BatchNorm1d(500)  # Batch Normalization
-        self.dense_2 = nn.Linear(500, 7)
+        self.dense_2 = nn.Linear(500, 6)
 
     def forward(self, x):
         # layer 1
@@ -133,7 +133,7 @@ class NIN(nn.Module):
 
         self.dense_1 = nn.Linear(144 * 100, 500)
         self.bn = nn.BatchNorm1d(500)
-        self.dense_2 = nn.Linear(500, 10)
+        self.dense_2 = nn.Linear(500, 6)
 
     def forward(self, x):
         # layer 1
@@ -213,7 +213,7 @@ class InceptionV1(nn.Module):
 
         self.l1 = nn.Linear(9216, 500)
         self.bn = nn.BatchNorm1d(500)
-        self.l2 = nn.Linear(500, 10)
+        self.l2 = nn.Linear(500, 6)
 
     def forward(self, x):
         h = torch.relu(self.c1(x))
@@ -286,7 +286,7 @@ class ResNet(nn.Module):
 
         self.l1 = nn.Linear(144 * 50, 500)
         self.bn = nn.BatchNorm1d(500)
-        self.l2 = nn.Linear(500, 10)
+        self.l2 = nn.Linear(500, 6)
 
     def forward(self, x):
         h = self.bn_1(self.conv_1(x))
@@ -359,7 +359,7 @@ class DenseNet(nn.Module):
 
         self.dense_1 = nn.Linear(144 * 100, 500)
         self.bn = nn.BatchNorm1d(500)
-        self.dense_2 = nn.Linear(500, 10)
+        self.dense_2 = nn.Linear(500, 6)
 
     def forward(self, x):
         # layer 1
@@ -435,7 +435,7 @@ class Xception(nn.Module):
 
         self.l1 = nn.Linear(144 * 100, 500)
         self.bn = nn.BatchNorm1d(500)
-        self.l2 = nn.Linear(500, 10)
+        self.l2 = nn.Linear(500, 6)
 
     def forward(self, x):
         h = torch.relu(self.c1(x))
@@ -520,7 +520,7 @@ class MobileNet(nn.Module):
 
         self.dense_1 = nn.Linear(200, 500)
         self.bn = nn.BatchNorm1d(500)
-        self.dense_2 = nn.Linear(500, 10)
+        self.dense_2 = nn.Linear(500, 6)
 
     def forward(self, x):
         h = self.activation(self.conv_0(x))
@@ -599,7 +599,7 @@ class ResNeXt(nn.Module):
 
         self.dense_1 = nn.Linear(200, 500)
         self.bn = nn.BatchNorm1d(500)
-        self.dense_2 = nn.Linear(500, 10)
+        self.dense_2 = nn.Linear(500, 6)
 
     def forward(self, x):
         h = self.activation(self.conv_0(x))
@@ -655,7 +655,7 @@ class SE_LeNet(nn.Module):
 
         self.dense_1 = nn.Linear(144 * 100, 500)
         self.bn_4 = nn.BatchNorm1d(500)
-        self.dense_2 = nn.Linear(500, 10)
+        self.dense_2 = nn.Linear(500, 6)
 
     def forward(self, x):
         # layer 1
