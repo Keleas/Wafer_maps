@@ -824,9 +824,9 @@ class TrainingDatabaseCreator(object):
     """
 
     """
-    def __init__(self):
+    def __init__(self, database_only_patterns_path):
         self.full_database_path = 'input/LSWMD.pkl'
-        self.database_only_patterns_path = 'input/df_withpattern_dim_more50.pkl'
+        self.database_only_patterns_path = 'input/' + database_only_patterns_path
         self.IMAGE_DIMS = (1, 96, 96)
 
     def read_full_data(self, synthesized_path_name=None):
@@ -841,10 +841,12 @@ class TrainingDatabaseCreator(object):
             full_real_database = pd.read_pickle(self.database_only_patterns_path)
         except FileNotFoundError:
             print('[INFO] Prepared full database not found\n'
-                  'Loading full database...')
+                  'Loading full database...'
+                  f'Create {self.database_only_patterns_path} database')
+
             full_real_database = pd.read_pickle(self.full_database_path)
-            mapping_type = {'Center': 0, 'Donut': 1, 'Edge-Loc': 2,
-                            'Edge-Ring': 3, 'Loc': 4, 'Scratch': 5,
+            mapping_type = {'Center': 0, 'Donut': 1, 'Loc': 2,
+                            'Scratch': 3, 'Edge-Ring': 4,  'Edge-Loc': 5,
                             'Random': 6, 'Near-full': 7, 'none': 8}
             full_real_database['failureNum'] = full_real_database.failureType
             full_real_database = full_real_database.replace({'failureNum': mapping_type})
@@ -990,23 +992,23 @@ class WaferDataset(Dataset):
 
 if __name__ == '__main__':
 
-    args = {'example_number': 5000,
-            'synthesized_path_name': 'synthesized_database_30000_v1.pkl',  # ex_num * 6
-            'image_dims': (96, 96, 1)}
+    # args = {'example_number': 5000,
+    #         'synthesized_path_name': 'synthesized_database_30000_v1.pkl',  # ex_num * 6
+    #         'image_dims': (96, 96, 1)}
+    #
+    # create_data = SynthesizedDatabaseCreator(**args)
+    # create_data.create_synthesized_database()
 
-    create_data = SynthesizedDatabaseCreator(**args)
-    create_data.create_synthesized_database()
-
-    # args = {'synthesized_path_name': 'synthesized_test_database.pkl',
-    #         'failure_types_ratio': {'Center': 0.0,
-    #                                 'Donut': 0.0,
-    #                                 'Edge-Loc': 0.0,
-    #                                 'Edge-Ring': 0.0,
-    #                                 'Loc': 0.0,
-    #                                 'Scratch': 0.0}
-    #         }
-    # data = TrainingDatabaseCreator()
-    # train, val, test = data.make_training_database(**args)
+    args = {'synthesized_path_name': 'synthesized_test_database.pkl',
+            'failure_types_ratio': {'Center': 0.0,
+                                    'Donut': 0.0,
+                                    'Edge-Loc': 0.0,
+                                    'Edge-Ring': 0.0,
+                                    'Loc': 0.0,
+                                    'Scratch': 0.0}
+            }
+    data = TrainingDatabaseCreator('real_g50_c6.pkl')
+    train, val, test = data.make_training_database(**args)
     #
     # train_list_im = list(train.waferMap.values)
     # train_label = list(train.failureNum.values)

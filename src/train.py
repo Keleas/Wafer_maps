@@ -179,7 +179,7 @@ class TrainModel(object):
                                                   'Loc': args.loc_rate,
                                                   'Scratch': args.scratch_rate}
                           }
-        data = TrainingDatabaseCreator()
+        data = TrainingDatabaseCreator(args.synth_name)
         train, test, val = data.make_training_database(**args_make_data)
 
         print(np.unique(train.failureNum.values))
@@ -310,8 +310,8 @@ class TrainModel(object):
 
     def main(self):
         # Get Model
-        self.model = models.ResNet(18)
-        self.model.to(device)
+        # self.model = models.ResNet(18)
+        # self.model.to(device)
 
         # Get Data
         self.load_data()  # train/val/test loaders
@@ -342,6 +342,7 @@ parser.add_argument('--weight_decay', default=5e-4, type=float, help='Weight dec
 parser.add_argument('--patience', default=40, type=int, help='Number of epoch waiting for best score')
 
 parser.add_argument('--synth_name', default='synthesized_database_30000_v1.pkl', type=str, help='Synthesized path name')
+parser.add_argument('--real_name', default='real_g50_c6.pkl', type=str, help='Real wafers path name')
 parser.add_argument('--center_rate', default=0.1, type=float, help='Center rate of real data')
 parser.add_argument('--donut_rate', default=0.1, type=float, help='Center rate of real data')
 parser.add_argument('--edge_loc_rate', default=0.1, type=float, help='Edge-Loc rate of real data')
