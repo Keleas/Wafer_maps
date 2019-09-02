@@ -310,14 +310,14 @@ class TrainModel(object):
 
     def main(self):
         # Get Model
-        # self.model = models.ResNet(18)
-        # self.model.to(device)
+        self.model = models.ResNet(34)
+        self.model.to(device)
 
         # Get Data
         self.load_data()  # train/val/test loaders
 
         # Start train loop
-        # self.start_train()
+        self.start_train()
 
         # Get train results
         # self.plot_errors(model_name='model_96_ResNet1710')
@@ -326,11 +326,11 @@ class TrainModel(object):
 
 
 parser = argparse.ArgumentParser(description='')
-parser.add_argument('--model', default='ResNet18_v30000', type=str, help='Model version')
+parser.add_argument('--model', default='ResNet34_v30000', type=str, help='Model version')
 parser.add_argument('--fine_size', default=96, type=int, help='Resized image size')
 parser.add_argument('--pad_left', default=0, type=int, help='Left padding size')
 parser.add_argument('--pad_right', default=0, type=int, help='Right padding size')
-parser.add_argument('--batch_size', default=32, type=int, help='Batch size for training')
+parser.add_argument('--batch_size', default=10, type=int, help='Batch size for training')
 parser.add_argument('--epoch', default=100, type=int, help='Number of training epochs')
 parser.add_argument('--snapshot', default=20, type=int, help='Number of snapshots per fold')
 parser.add_argument('--cuda', default=True, type=bool, help='Use cuda to train model')
