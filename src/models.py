@@ -286,7 +286,7 @@ class ResNet(nn.Module):
 
         self.l1 = nn.Linear(144 * 50, 500)
         self.bn = nn.BatchNorm1d(500)
-        self.l2 = nn.Linear(500, 6)
+        self.l2 = nn.Linear(500, 7)
 
     def forward(self, x):
         h = self.bn_1(self.conv_1(x))

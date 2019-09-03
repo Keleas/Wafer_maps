@@ -45,7 +45,7 @@ class TrainModel(object):
         truths = []
 
         self.model.eval()
-        for inputs, label in tqdm(self.val_loader, ascii=True, desc='validation'):
+        for inputs, label in tqdm(self.val_loader, total=len(self.val_loader), ascii=True, desc='validation'):
             inputs, label = inputs.to(device), label.to(device)
             with torch.set_grad_enabled(False):
                 out = self.model(inputs)
@@ -70,7 +70,7 @@ class TrainModel(object):
         cum_loss = 0
 
         self.model.train()
-        for inputs, label in tqdm(self.train_loader, ascii=True, desc='train'):
+        for inputs, label in tqdm(self.train_loader, total=len(self.train_loader), ascii=True, desc='train'):
             inputs, label = inputs.to(device), label.to(device)
             self.optimizer.zero_grad()
 
@@ -167,7 +167,7 @@ class TrainModel(object):
 
             if early_stopping.early_stop:
                 print("Early stopping")
-                # print(f"Early stop at {epoch} epoch")
+                print(f"Early stop at {epoch} epoch")
                 return
 
     def load_data(self):
@@ -177,12 +177,11 @@ class TrainModel(object):
                                                   'Edge-Loc': args.edge_loc_rate,
                                                   'Edge-Ring': args.edge_ring_rate,
                                                   'Loc': args.loc_rate,
-                                                  'Scratch': args.scratch_rate}
+                                                  'Scratch': args.scratch_rate,
+                                                  'Random': args.random_rate}
                           }
-        data = TrainingDatabaseCreator(args.synth_name)
+        data = TrainingDatabaseCreator(args.real_name)
         train, test, val = data.make_training_database(**args_make_data)
-
-        print(np.unique(train.failureNum.values))
 
         train_data = WaferDataset(list(train.waferMap.values),
                                   mode='train', label_list=list(train.failureNum.values),
@@ -236,7 +235,7 @@ class TrainModel(object):
         test_model = test_model.to(device)
 
         self.model.eval()
-        for inputs, label in tqdm(self.test_loader, ascii=True, desc='test'):
+        for inputs, label in tqdm(self.test_loader, total=len(self.test_loader), ascii=True, desc='test'):
             inputs, label = inputs.to(device), label.to(device)
             with torch.set_grad_enabled(False):
                 out = test_model(inputs)
@@ -310,7 +309,7 @@ class TrainModel(object):
 
     def main(self):
         # Get Model
-        self.model = models.ResNet(34)
+        self.model = models.ResNet(int(args.model[-2:]))
         self.model.to(device)
 
         # Get Data
@@ -320,39 +319,40 @@ class TrainModel(object):
         self.start_train()
 
         # Get train results
-        # self.plot_errors(model_name='model_96_ResNet1710')
+        # self.plot_errors(model_name=None)
 
         return True
 
 
 parser = argparse.ArgumentParser(description='')
-parser.add_argument('--model', default='ResNet34_v30000', type=str, help='Model version')
+parser.add_argument('--model', default='v2_ResNet18', type=str, help='Model version')
 parser.add_argument('--fine_size', default=96, type=int, help='Resized image size')
 parser.add_argument('--pad_left', default=0, type=int, help='Left padding size')
 parser.add_argument('--pad_right', default=0, type=int, help='Right padding size')
 parser.add_argument('--batch_size', default=10, type=int, help='Batch size for training')
 parser.add_argument('--epoch', default=100, type=int, help='Number of training epochs')
-parser.add_argument('--snapshot', default=20, type=int, help='Number of snapshots per fold')
+parser.add_argument('--snapshot', default=3, type=int, help='Number of snapshots per fold')
 parser.add_argument('--cuda', default=True, type=bool, help='Use cuda to train model')
 parser.add_argument('--save_weight', default='output/weights/', type=str, help='weight save space')
-parser.add_argument('--max_lr', default=0.01, type=float, help='max learning rate')
-parser.add_argument('--min_lr', default=0.001, type=float, help='min learning rate')
+parser.add_argument('--max_lr', default=5e-3, type=float, help='max learning rate')
+parser.add_argument('--min_lr', default=1e-6, type=float, help='min learning rate')
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum for SGD')
-parser.add_argument('--weight_decay', default=5e-4, type=float, help='Weight decay for SGD')
+parser.add_argument('--weight_decay', default=1e-3, type=float, help='Weight decay for SGD')
 parser.add_argument('--patience', default=40, type=int, help='Number of epoch waiting for best score')
 
-parser.add_argument('--synth_name', default='synthesized_database_30000_v1.pkl', type=str, help='Synthesized path name')
-parser.add_argument('--real_name', default='real_g50_c6.pkl', type=str, help='Real wafers path name')
+parser.add_argument('--synth_name', default='synt_noise_c7_v1.pkl', type=str, help='Synthesized path name')
+parser.add_argument('--real_name', default='real_g50_c7.pkl', type=str, help='Real wafers path name')
 parser.add_argument('--center_rate', default=0.1, type=float, help='Center rate of real data')
 parser.add_argument('--donut_rate', default=0.1, type=float, help='Center rate of real data')
 parser.add_argument('--edge_loc_rate', default=0.1, type=float, help='Edge-Loc rate of real data')
 parser.add_argument('--edge_ring_rate', default=0.1, type=float, help='Edge-Ring rate of real data')
 parser.add_argument('--loc_rate', default=0.1, type=float, help='Loc rate of real data')
 parser.add_argument('--scratch_rate', default=0.1, type=float, help='Scratch rate of real data')
+parser.add_argument('--random_rate', default=0.1, type=float, help='Random rate of real data')
 
 args = parser.parse_args()
 fine_size = args.fine_size + args.pad_left + args.pad_right
-args.weight_name = 'model_' + str(fine_size) + '_' + args.model
+args.weight_name = 'model_' + str(fine_size) + '_' + args.model + '_' + args.synth_name
 
 if not os.path.isdir(args.save_weight):
     os.mkdir(args.save_weight)

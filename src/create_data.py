@@ -184,7 +184,7 @@ class SynthesizedDatabaseCreator(object):
     def generator_scratch(self, mode=0, plot=False, line_count=1, add_patterns=[None], is_noised=False):
         print('[INFO] Create scratches')
         # число синтезированных карт
-        N_POINTS = self.number_points
+        N_POINTS = self.number_points // 5
         line_part = 5  # сегментов в одной линии
 
         # суммарная длина отрезка
@@ -795,22 +795,26 @@ class SynthesizedDatabaseCreator(object):
         return df_random
 
     def create_synthesized_database(self):
+        is_noised = True
         df_scratch_curved = [self.generator_scratch(mode=0, plot=False, line_count=i+1,
-                                                    add_patterns=[None], is_noised=True)
+                                                    add_patterns=[None], is_noised=is_noised)
                              for i in range(4)]
-        df_scratch_curved = pd.concat(df_scratch_curved, ignore_index=True)
+        df_scratch = pd.concat(df_scratch_curved, ignore_index=True)
 
-        df_donut = self.generator_donut(mode=0, plot=False, add_patterns=[None], is_noised=True)
-        df_loc = self.generator_loc(mode=0, plot=False, add_patterns=[None], is_noised=True)
-        df_center = self.generator_center(mode=0, plot=False, add_patterns=[None], is_noised=True)
-        df_edge_ring = self.generator_edge_ring(mode=0, plot=False, add_patterns=[None], is_noised=True)
-        df_edge_loc = self.generator_edge_loc(mode=0, plot=False, add_patterns=[None], is_noised=True)
+        df_donut = self.generator_donut(mode=0, plot=False, add_patterns=[None], is_noised=is_noised)
+        df_loc = self.generator_loc(mode=0, plot=False, add_patterns=[None], is_noised=is_noised)
+        df_center = self.generator_center(mode=0, plot=False, add_patterns=[None], is_noised=is_noised)
+        df_edge_ring = self.generator_edge_ring(mode=0, plot=False, add_patterns=[None], is_noised=is_noised)
+        df_edge_loc = self.generator_edge_loc(mode=0, plot=False, add_patterns=[None], is_noised=is_noised)
+        df_random = self.generator_random(plot=False)
 
-        df = pd.concat([df_center, df_donut, df_edge_loc,
-                        df_edge_ring, df_loc, df_scratch_curved], sort=False)
+        df = pd.concat([df_center, df_donut, df_loc,
+                        df_scratch, df_edge_ring, df_edge_loc,
+                        df_random], sort=False)
 
-        mapping_type = {'Center': 0, 'Donut': 1, 'Edge-Loc': 2,
-                        'Edge-Ring': 3, 'Loc': 4, 'Scratch': 5}
+        mapping_type = {'Center': 0, 'Donut': 1, 'Loc': 2,
+                        'Scratch': 3, 'Edge-Ring': 4, 'Edge-Loc': 5,
+                        'Random': 6}
 
         df['failureNum'] = df.failureType
         df = df.replace({'failureNum': mapping_type})
@@ -851,7 +855,7 @@ class TrainingDatabaseCreator(object):
             full_real_database['failureNum'] = full_real_database.failureType
             full_real_database = full_real_database.replace({'failureNum': mapping_type})
             full_real_database = full_real_database[(full_real_database['failureNum'] >= 0) &
-                                                    (full_real_database['failureNum'] <= 5)]
+                                                    (full_real_database['failureNum'] <= 6)]
             full_real_database = full_real_database.reset_index()
             full_real_database = full_real_database.drop(labels=['dieSize', 'lotName', 'waferIndex',
                                                                  'trianTestLabel', 'index'], axis=1)
@@ -992,23 +996,24 @@ class WaferDataset(Dataset):
 
 if __name__ == '__main__':
 
-    # args = {'example_number': 5000,
-    #         'synthesized_path_name': 'synthesized_database_30000_v1.pkl',  # ex_num * 6
-    #         'image_dims': (96, 96, 1)}
-    #
-    # create_data = SynthesizedDatabaseCreator(**args)
-    # create_data.create_synthesized_database()
+    args = {'example_number': 5000,
+            'synthesized_path_name': 'synt_noise_c7_v1.pkl',  # ex_num * num of classes
+            'image_dims': (96, 96, 1)}
 
-    args = {'synthesized_path_name': 'synthesized_test_database.pkl',
-            'failure_types_ratio': {'Center': 0.0,
-                                    'Donut': 0.0,
-                                    'Edge-Loc': 0.0,
-                                    'Edge-Ring': 0.0,
-                                    'Loc': 0.0,
-                                    'Scratch': 0.0}
-            }
-    data = TrainingDatabaseCreator('real_g50_c6.pkl')
-    train, val, test = data.make_training_database(**args)
+    create_data = SynthesizedDatabaseCreator(**args)
+    create_data.create_synthesized_database()
+
+    # args = {'synthesized_path_name': 'synt_noise_c7_v1.pkl',
+    #         'failure_types_ratio': {'Center': 0.0,
+    #                                 'Donut': 0.0,
+    #                                 'Edge-Loc': 0.0,
+    #                                 'Edge-Ring': 0.0,
+    #                                 'Loc': 0.0,
+    #                                 'Scratch': 0.0,
+    #                                 'Random': 0.0}
+    #         }
+    # data = TrainingDatabaseCreator('real_g50_c7.pkl')
+    # train, val, test = data.make_training_database(**args)
     #
     # train_list_im = list(train.waferMap.values)
     # train_label = list(train.failureNum.values)
