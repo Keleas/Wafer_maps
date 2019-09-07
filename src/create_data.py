@@ -814,7 +814,7 @@ class SynthesizedDatabaseCreator(object):
 
         mapping_type = {'Center': 0, 'Donut': 1, 'Loc': 2,
                         'Scratch': 3, 'Edge-Ring': 4, 'Edge-Loc': 5,
-                        'Random': 6}
+                        'none': 6}
 
         df['failureNum'] = df.failureType
         df = df.replace({'failureNum': mapping_type})
@@ -851,7 +851,7 @@ class TrainingDatabaseCreator(object):
             full_real_database = pd.read_pickle(self.full_database_path)
             mapping_type = {'Center': 0, 'Donut': 1, 'Loc': 2,
                             'Scratch': 3, 'Edge-Ring': 4,  'Edge-Loc': 5,
-                            'Random': 6, 'Near-full': 7, 'none': 8}
+                            'none': 6, 'Near-full': 7, 'Random': 8}
             full_real_database['failureNum'] = full_real_database.failureType
             full_real_database = full_real_database.replace({'failureNum': mapping_type})
             full_real_database = full_real_database[(full_real_database['failureNum'] >= 0) &
@@ -864,7 +864,7 @@ class TrainingDatabaseCreator(object):
             # Get fixed size of maps
             out_map = []
             out_class = []
-            dim_size = 50
+            dim_size = 40
             for index, row in full_real_database.iterrows():
                 waf_map = row.waferMap
                 waf_type = row.failureType

@@ -520,7 +520,7 @@ class MobileNet(nn.Module):
 
         self.dense_1 = nn.Linear(200, 500)
         self.bn = nn.BatchNorm1d(500)
-        self.dense_2 = nn.Linear(500, 6)
+        self.dense_2 = nn.Linear(500, 7)
 
     def forward(self, x):
         h = self.activation(self.conv_0(x))

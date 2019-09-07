@@ -132,7 +132,7 @@ class TrainModel(object):
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=args.max_lr, momentum=args.momentum,
                                          weight_decay=args.weight_decay)
         self.lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, scheduler_step, args.min_lr)
-        early_stopping = EarlyStopping(patience=args.patience, verbose=True)
+        early_stopping = EarlyStopping(patience=args.patience, verbose=True, save_name=args.weight_name)
 
         # Service variables
         losses_train = []  # save training losses
@@ -163,7 +163,7 @@ class TrainModel(object):
                 best_acc = 0
 
             # If the model could not get better, then stop training
-            early_stopping(losses_val[-1], self.model)
+            early_stopping(losses_val[-1], args.model)
 
             if early_stopping.early_stop:
                 print("Early stopping")
@@ -221,14 +221,16 @@ class TrainModel(object):
 
         return True
 
-    def plot_errors(self, model_name=None):
+    def plot_errors(self):
         print('[INFO] Plot errors...')
         cum_loss = 0
         predicts = []
         truths = []
-        if model_name:
-            checkpoint = torch.load(args.save_weight + model_name + '.pth')
-        else:
+        model_name = None
+        try:
+            checkpoint = torch.load(args.save_weight + args.weight_name)
+            model_name = checkpoint
+        except FileNotFoundError:
             checkpoint = torch.load(args.save_weight + 'checkpoint.pth')
         test_model = self.model
         test_model.load_state_dict(checkpoint)
@@ -250,8 +252,10 @@ class TrainModel(object):
         truths = np.concatenate(truths).squeeze()
         accuracy = (truths == predicts).mean()
         val_loss = cum_loss / self.val_data.__len__()
+        from sklearn.metrics import f1_score
+        f1 = f1_score(truths, predicts, average='weighted')
 
-        print(f"Top-1 Accuracy: {accuracy:.6f}, Loss: {val_loss:.6f}")
+        print(f"Top-1 Accuracy: {accuracy:.6f}, Loss: {val_loss:.6f}, F1: {f1:.6f}")
 
         def plot_confusion_matrix(cm, normalize=False, title='Confusion matrix', cmap=plt.cm.Blues):
             """
@@ -279,8 +283,9 @@ class TrainModel(object):
         np.set_printoptions(precision=2)
 
         _, axes = plt.subplots(nrows=1, ncols=2, figsize=(15, 6))
-        types = ['Center', 'Donut', 'Edge-Loc',
-                 'Edge-Ring', 'Loc', 'Scratch']
+        types = ['Center', 'Donut', 'Loc',
+                 'Scratch', 'Edge-Ring', 'Edge-Loc',
+                 'none']
         l = np.arange(len(types))
         for ax in axes:
             ax.set_yticks(l)
@@ -309,33 +314,34 @@ class TrainModel(object):
 
     def main(self):
         # Get Model
-        self.model = models.ResNet(int(args.model[-2:]))
+        # self.model = models.ResNet(int(args.model[-2:]))
+        self.model = models.MobileNet()
         self.model.to(device)
 
         # Get Data
         self.load_data()  # train/val/test loaders
 
         # Start train loop
-        self.start_train()
+        # self.start_train()
 
         # Get train results
-        # self.plot_errors(model_name=None)
+        self.plot_errors()
 
         return True
 
 
 parser = argparse.ArgumentParser(description='')
-parser.add_argument('--model', default='v2_ResNet18', type=str, help='Model version')
+parser.add_argument('--model', default='v1_ResNet34', type=str, help='Model version')
 parser.add_argument('--fine_size', default=96, type=int, help='Resized image size')
 parser.add_argument('--pad_left', default=0, type=int, help='Left padding size')
 parser.add_argument('--pad_right', default=0, type=int, help='Right padding size')
-parser.add_argument('--batch_size', default=10, type=int, help='Batch size for training')
+parser.add_argument('--batch_size', default=4, type=int, help='Batch size for training')
 parser.add_argument('--epoch', default=100, type=int, help='Number of training epochs')
-parser.add_argument('--snapshot', default=3, type=int, help='Number of snapshots per fold')
+parser.add_argument('--snapshot', default=5, type=int, help='Number of snapshots per fold')
 parser.add_argument('--cuda', default=True, type=bool, help='Use cuda to train model')
 parser.add_argument('--save_weight', default='output/weights/', type=str, help='weight save space')
-parser.add_argument('--max_lr', default=5e-3, type=float, help='max learning rate')
-parser.add_argument('--min_lr', default=1e-6, type=float, help='min learning rate')
+parser.add_argument('--max_lr', default=1e-3, type=float, help='max learning rate')
+parser.add_argument('--min_lr', default=1e-5, type=float, help='min learning rate')
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum for SGD')
 parser.add_argument('--weight_decay', default=1e-3, type=float, help='Weight decay for SGD')
 parser.add_argument('--patience', default=40, type=int, help='Number of epoch waiting for best score')
@@ -348,7 +354,7 @@ parser.add_argument('--edge_loc_rate', default=0.1, type=float, help='Edge-Loc r
 parser.add_argument('--edge_ring_rate', default=0.1, type=float, help='Edge-Ring rate of real data')
 parser.add_argument('--loc_rate', default=0.1, type=float, help='Loc rate of real data')
 parser.add_argument('--scratch_rate', default=0.1, type=float, help='Scratch rate of real data')
-parser.add_argument('--random_rate', default=0.1, type=float, help='Random rate of real data')
+parser.add_argument('--none_rate', default=0.1, type=float, help='Random rate of real data')
 
 args = parser.parse_args()
 fine_size = args.fine_size + args.pad_left + args.pad_right
