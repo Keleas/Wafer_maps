@@ -778,7 +778,7 @@ class SynthesizedDatabaseCreator(object):
         # число синтезированных карт
         N_POINTS = self.number_points
 
-        df_random = self.create_random(N_POINTS, pattern_type='Random', lam_poisson=2.1)
+        df_random = self.create_random(N_POINTS, pattern_type='none', lam_poisson=2.1)
 
         if plot:
             fig, ax = plt.subplots(nrows=10, ncols=10, figsize=(10, 8))
@@ -795,7 +795,7 @@ class SynthesizedDatabaseCreator(object):
         return df_random
 
     def create_synthesized_database(self):
-        is_noised = True
+        is_noised = False
         df_scratch_curved = [self.generator_scratch(mode=0, plot=False, line_count=i+1,
                                                     add_patterns=[None], is_noised=is_noised)
                              for i in range(4)]
@@ -932,6 +932,16 @@ class TrainingDatabaseCreator(object):
                                           training_database.shape, training_database.shape[0] / full_dim,
                                           testing_database.shape, testing_database.shape[0] / full_dim,
                                           val_database.shape, val_database.shape[0] / full_dim))
+
+        uni = np.unique(training_database.failureNum, return_counts=True)[1]
+        print(f'[TRAIN] Center: {uni[0]}, Donut: {uni[1]}, Loc: {uni[2]}, Scratch: {uni[3]}, Edge-Ring: {uni[4]}, Edge-Loc: {uni[5]}, none: {uni[6]}')
+
+        uni = np.unique(val_database.failureNum, return_counts=True)[1]
+        print(f'[VAL] Center: {uni[0]}, Donut: {uni[1]}, Loc: {uni[2]}, Scratch: {uni[3]}, Edge-Ring: {uni[4]}, Edge-Loc: {uni[5]}, none: {uni[6]}')
+
+        uni = np.unique(testing_database.failureNum, return_counts=True)[1]
+        print(f'[TEST] Center: {uni[0]}, Donut: {uni[1]}, Loc: {uni[2]}, Scratch: {uni[3]}, Edge-Ring: {uni[4]}, Edge-Loc: {uni[5]}, none: {uni[6]}')
+
         print('reserved time: {:.2f}s'.format(time.time() - start_time))
         gc.collect()
         return training_database, testing_database, val_database
@@ -996,8 +1006,8 @@ class WaferDataset(Dataset):
 
 if __name__ == '__main__':
 
-    args = {'example_number': 5000,
-            'synthesized_path_name': 'synt_noise_c7_v1.pkl',  # ex_num * num of classes
+    args = {'example_number': 3000,
+            'synthesized_path_name': 'synt_c7_3k.pkl',  # ex_num * num of classes
             'image_dims': (96, 96, 1)}
 
     create_data = SynthesizedDatabaseCreator(**args)

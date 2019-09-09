@@ -11,8 +11,8 @@ from torch import nn
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler
 from sklearn.metrics import confusion_matrix, accuracy_score
+import torchvision.models as models
 
-import src.models as models
 from src.logger import Logger
 from src.create_data import TrainingDatabaseCreator, WaferDataset
 from src.torchutils import EarlyStopping, AdamW, CyclicLRWithRestarts
@@ -154,7 +154,7 @@ class TrainModel(object):
                 best_param = self.model.state_dict()
 
             if (epoch + 1) % scheduler_step == 0:
-                torch.save(best_param, args.save_weight + args.weight_name + str(num_snapshot) + '.pth')
+                # torch.save(best_param, args.save_weight + args.weight_name + str(num_snapshot) + '.pth')
                 self.optimizer = torch.optim.SGD(self.model.parameters(), lr=args.max_lr, momentum=args.momentum,
                                                  weight_decay=args.weight_decay)
                 self.lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, scheduler_step,
@@ -163,7 +163,7 @@ class TrainModel(object):
                 best_acc = 0
 
             # If the model could not get better, then stop training
-            early_stopping(losses_val[-1], args.model)
+            early_stopping(losses_val[-1], self.model)
 
             if early_stopping.early_stop:
                 print("Early stopping")
@@ -178,7 +178,7 @@ class TrainModel(object):
                                                   'Edge-Ring': args.edge_ring_rate,
                                                   'Loc': args.loc_rate,
                                                   'Scratch': args.scratch_rate,
-                                                  'Random': args.random_rate}
+                                                  'none': args.none_rate}
                           }
         data = TrainingDatabaseCreator(args.real_name)
         train, test, val = data.make_training_database(**args_make_data)
@@ -314,30 +314,35 @@ class TrainModel(object):
 
     def main(self):
         # Get Model
-        # self.model = models.ResNet(int(args.model[-2:]))
-        self.model = models.MobileNet()
+        self.model = models.resnet18(pretrained=False, num_classes=7)
+        try:
+            checkpoint_1 = torch.load('output/weights/s96_v1_ResNet18_synt_c7_3k.pkl.pth')
+            checkpoint_2 = torch.load('output/weights/s96_v1_ResNet18_synt_noise_c7_3k.pkl.pth')
+            self.model.load_state_dict(checkpoint_2)
+        except FileNotFoundError:
+            print('PRETRAIN NOT FOUND')
         self.model.to(device)
 
         # Get Data
         self.load_data()  # train/val/test loaders
 
         # Start train loop
-        # self.start_train()
+        self.start_train()
 
         # Get train results
-        self.plot_errors()
+        # self.plot_errors()
 
         return True
 
 
 parser = argparse.ArgumentParser(description='')
-parser.add_argument('--model', default='v1_ResNet34', type=str, help='Model version')
+parser.add_argument('--model', default='v1_ResNet18', type=str, help='Model version')
 parser.add_argument('--fine_size', default=96, type=int, help='Resized image size')
 parser.add_argument('--pad_left', default=0, type=int, help='Left padding size')
 parser.add_argument('--pad_right', default=0, type=int, help='Right padding size')
 parser.add_argument('--batch_size', default=4, type=int, help='Batch size for training')
-parser.add_argument('--epoch', default=100, type=int, help='Number of training epochs')
-parser.add_argument('--snapshot', default=5, type=int, help='Number of snapshots per fold')
+parser.add_argument('--epoch', default=40, type=int, help='Number of training epochs')
+parser.add_argument('--snapshot', default=3, type=int, help='Number of snapshots per fold')
 parser.add_argument('--cuda', default=True, type=bool, help='Use cuda to train model')
 parser.add_argument('--save_weight', default='output/weights/', type=str, help='weight save space')
 parser.add_argument('--max_lr', default=1e-3, type=float, help='max learning rate')
@@ -346,8 +351,8 @@ parser.add_argument('--momentum', default=0.9, type=float, help='momentum for SG
 parser.add_argument('--weight_decay', default=1e-3, type=float, help='Weight decay for SGD')
 parser.add_argument('--patience', default=40, type=int, help='Number of epoch waiting for best score')
 
-parser.add_argument('--synth_name', default='synt_noise_c7_v1.pkl', type=str, help='Synthesized path name')
-parser.add_argument('--real_name', default='real_g50_c7.pkl', type=str, help='Real wafers path name')
+parser.add_argument('--synth_name', default='synt_noise_c7_3k.pkl', type=str, help='Synthesized path name')
+parser.add_argument('--real_name', default='real_g40_c7.pkl', type=str, help='Real wafers path name')
 parser.add_argument('--center_rate', default=0.1, type=float, help='Center rate of real data')
 parser.add_argument('--donut_rate', default=0.1, type=float, help='Center rate of real data')
 parser.add_argument('--edge_loc_rate', default=0.1, type=float, help='Edge-Loc rate of real data')
@@ -358,7 +363,7 @@ parser.add_argument('--none_rate', default=0.1, type=float, help='Random rate of
 
 args = parser.parse_args()
 fine_size = args.fine_size + args.pad_left + args.pad_right
-args.weight_name = 'model_' + str(fine_size) + '_' + args.model + '_' + args.synth_name
+args.weight_name = 's' + str(fine_size) + '_' + args.model + '_' + args.synth_name
 
 if not os.path.isdir(args.save_weight):
     os.mkdir(args.save_weight)
