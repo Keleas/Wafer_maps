@@ -131,6 +131,7 @@ class TrainModel(object):
         # Setup optimizer
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=args.max_lr, momentum=args.momentum,
                                          weight_decay=args.weight_decay)
+        # self.lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, factor=0.5, patience=6)
         self.lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, scheduler_step, args.min_lr)
         early_stopping = EarlyStopping(patience=args.patience, verbose=True, save_name=args.weight_name)
 
@@ -141,7 +142,7 @@ class TrainModel(object):
         for epoch in range(args.epoch):
             train_loss = self.train_step()
             val_loss, accuracy = self.val_step()
-            self.lr_scheduler.step()
+            self.lr_scheduler.step(val_loss)
 
             losses_train.append(train_loss)
             losses_val.append(val_loss)
@@ -171,17 +172,20 @@ class TrainModel(object):
                 return
 
     def load_data(self):
-        args_make_data = {'synthesized_path_name': args.synth_name,
-                          'failure_types_ratio': {'Center': args.center_rate,
-                                                  'Donut': args.donut_rate,
-                                                  'Edge-Loc': args.edge_loc_rate,
-                                                  'Edge-Ring': args.edge_ring_rate,
-                                                  'Loc': args.loc_rate,
-                                                  'Scratch': args.scratch_rate,
-                                                  'none': args.none_rate}
-                          }
+        # args_make_data = {'synthesized_path_name': args.synth_name,
+        #                   'failure_types_ratio': {'Center': args.center_rate,
+        #                                           'Donut': args.donut_rate,
+        #                                           'Edge-Loc': args.edge_loc_rate,
+        #                                           'Edge-Ring': args.edge_ring_rate,
+        #                                           'Loc': args.loc_rate,
+        #                                           'Scratch': args.scratch_rate,
+        #                                           'none': args.none_rate}
+        #                   }
+        # data = TrainingDatabaseCreator(args.real_name)
+        # train, test, val = data.make_training_database(**args_make_data)
+
         data = TrainingDatabaseCreator(args.real_name)
-        train, test, val = data.make_training_database(**args_make_data)
+        train, test, val = data.get_fixed_size_dataset(args.synth_name, 100)
 
         train_data = WaferDataset(list(train.waferMap.values),
                                   mode='train', label_list=list(train.failureNum.values),
@@ -221,17 +225,17 @@ class TrainModel(object):
 
         return True
 
-    def plot_errors(self):
+    def plot_errors(self, classes=6):
         print('[INFO] Plot errors...')
         cum_loss = 0
         predicts = []
         truths = []
-        model_name = None
+        model_name = 's96_v1_ResNet34_synt_noise_c7_3k.pkl.pth'
         try:
-            checkpoint = torch.load(args.save_weight + args.weight_name)
-            model_name = checkpoint
+            checkpoint = torch.load('output/weights/' + model_name)
         except FileNotFoundError:
-            checkpoint = torch.load(args.save_weight + 'checkpoint.pth')
+            # checkpoint = torch.load('input/weights/s96_v1_ResNet18_synt_noise_c7_3k.pkl.pth')
+            raise TypeError
         test_model = self.model
         test_model.load_state_dict(checkpoint)
         test_model = test_model.to(device)
@@ -246,7 +250,7 @@ class TrainModel(object):
             _, y_pred = torch.max(out, 1)
             predicts.append(y_pred.cpu().numpy())
             truths.append(label.cpu().numpy())
-            cum_loss += loss.item() * inputs.size(0)
+            cum_loss += loss.item()
 
         predicts = np.concatenate(predicts).squeeze()
         truths = np.concatenate(truths).squeeze()
@@ -279,13 +283,14 @@ class TrainModel(object):
             plt.ylabel('True label')
             plt.xlabel('Predicted label')
 
-        cnf_matrix = confusion_matrix(truths, predicts)
+        cnf_matrix = confusion_matrix(truths[:classes], predicts[:classes])
         np.set_printoptions(precision=2)
 
         _, axes = plt.subplots(nrows=1, ncols=2, figsize=(15, 6))
         types = ['Center', 'Donut', 'Loc',
                  'Scratch', 'Edge-Ring', 'Edge-Loc',
                  'none']
+        types = types[:classes]
         l = np.arange(len(types))
         for ax in axes:
             ax.set_yticks(l)
@@ -314,13 +319,15 @@ class TrainModel(object):
 
     def main(self):
         # Get Model
-        self.model = models.resnet18(pretrained=False, num_classes=7)
-        try:
-            checkpoint_1 = torch.load('output/weights/s96_v1_ResNet18_synt_c7_3k.pkl.pth')
-            checkpoint_2 = torch.load('output/weights/s96_v1_ResNet18_synt_noise_c7_3k.pkl.pth')
-            self.model.load_state_dict(checkpoint_2)
-        except FileNotFoundError:
-            print('PRETRAIN NOT FOUND')
+        is_pretrained = False
+        self.model = models.resnet34(pretrained=False, num_classes=7)
+        if is_pretrained:
+            try:
+                # checkpoint_1 = torch.load('output/weights/s96_v1_ResNet18_synt_c7_3k.pkl.pth')
+                checkpoint_2 = torch.load('output/weights/s96_v1_ResNet34_synt_noise_c6_4k.pkl.pth')
+                self.model.load_state_dict(checkpoint_2)
+            except FileNotFoundError:
+                raise TypeError('PRETRAINED NOT FOUND')
         self.model.to(device)
 
         # Get Data
@@ -330,19 +337,19 @@ class TrainModel(object):
         self.start_train()
 
         # Get train results
-        # self.plot_errors()
+        # self.plot_errors(classes=6)
 
         return True
 
 
 parser = argparse.ArgumentParser(description='')
-parser.add_argument('--model', default='v1_ResNet18', type=str, help='Model version')
+parser.add_argument('--model', default='v1_ResNet34', type=str, help='Model version')
 parser.add_argument('--fine_size', default=96, type=int, help='Resized image size')
 parser.add_argument('--pad_left', default=0, type=int, help='Left padding size')
 parser.add_argument('--pad_right', default=0, type=int, help='Right padding size')
 parser.add_argument('--batch_size', default=4, type=int, help='Batch size for training')
-parser.add_argument('--epoch', default=40, type=int, help='Number of training epochs')
-parser.add_argument('--snapshot', default=3, type=int, help='Number of snapshots per fold')
+parser.add_argument('--epoch', default=50, type=int, help='Number of training epochs')
+parser.add_argument('--snapshot', default=5, type=int, help='Number of snapshots per fold')
 parser.add_argument('--cuda', default=True, type=bool, help='Use cuda to train model')
 parser.add_argument('--save_weight', default='output/weights/', type=str, help='weight save space')
 parser.add_argument('--max_lr', default=1e-3, type=float, help='max learning rate')
@@ -351,7 +358,7 @@ parser.add_argument('--momentum', default=0.9, type=float, help='momentum for SG
 parser.add_argument('--weight_decay', default=1e-3, type=float, help='Weight decay for SGD')
 parser.add_argument('--patience', default=40, type=int, help='Number of epoch waiting for best score')
 
-parser.add_argument('--synth_name', default='synt_noise_c7_3k.pkl', type=str, help='Synthesized path name')
+parser.add_argument('--synth_name', default='synt_noise_c7_4k.pkl', type=str, help='Synthesized path name')
 parser.add_argument('--real_name', default='real_g40_c7.pkl', type=str, help='Real wafers path name')
 parser.add_argument('--center_rate', default=0.1, type=float, help='Center rate of real data')
 parser.add_argument('--donut_rate', default=0.1, type=float, help='Center rate of real data')

@@ -184,7 +184,7 @@ class SynthesizedDatabaseCreator(object):
     def generator_scratch(self, mode=0, plot=False, line_count=1, add_patterns=[None], is_noised=False):
         print('[INFO] Create scratches')
         # число синтезированных карт
-        N_POINTS = self.number_points // 5
+        N_POINTS = self.number_points // 2
         line_part = 5  # сегментов в одной линии
 
         # суммарная длина отрезка
@@ -605,7 +605,7 @@ class SynthesizedDatabaseCreator(object):
         return df_edge_ring
 
     def generator_edge_loc(self, mode=0, plot=False, add_patterns=[None], is_noised=True):
-        print('[INFO] Create edge_ring')
+        print('[INFO] Create edge_loc')
         # число синтезированных карт
         N_POINTS = self.number_points
 
@@ -794,11 +794,10 @@ class SynthesizedDatabaseCreator(object):
 
         return df_random
 
-    def create_synthesized_database(self):
-        is_noised = False
+    def create_synthesized_database(self, classes, is_noised):
         df_scratch_curved = [self.generator_scratch(mode=0, plot=False, line_count=i+1,
                                                     add_patterns=[None], is_noised=is_noised)
-                             for i in range(4)]
+                             for i in range(2)]
         df_scratch = pd.concat(df_scratch_curved, ignore_index=True)
 
         df_donut = self.generator_donut(mode=0, plot=False, add_patterns=[None], is_noised=is_noised)
@@ -808,13 +807,18 @@ class SynthesizedDatabaseCreator(object):
         df_edge_loc = self.generator_edge_loc(mode=0, plot=False, add_patterns=[None], is_noised=is_noised)
         df_random = self.generator_random(plot=False)
 
-        df = pd.concat([df_center, df_donut, df_loc,
-                        df_scratch, df_edge_ring, df_edge_loc,
-                        df_random], sort=False)
+
+        data = [df_center, df_donut, df_loc,
+                df_scratch, df_edge_ring, df_edge_loc,
+                df_random
+                ]
+        df = pd.concat(data[:classes], sort=False)
 
         mapping_type = {'Center': 0, 'Donut': 1, 'Loc': 2,
                         'Scratch': 3, 'Edge-Ring': 4, 'Edge-Loc': 5,
-                        'none': 6}
+                        'none': 6
+                        }
+        mapping_type = dict(list(iter(mapping_type.items()))[:classes])
 
         df['failureNum'] = df.failureType
         df = df.replace({'failureNum': mapping_type})
@@ -855,7 +859,7 @@ class TrainingDatabaseCreator(object):
             full_real_database['failureNum'] = full_real_database.failureType
             full_real_database = full_real_database.replace({'failureNum': mapping_type})
             full_real_database = full_real_database[(full_real_database['failureNum'] >= 0) &
-                                                    (full_real_database['failureNum'] <= 6)]
+                                                    (full_real_database['failureNum'] <= 5)]
             full_real_database = full_real_database.reset_index()
             full_real_database = full_real_database.drop(labels=['dieSize', 'lotName', 'waferIndex',
                                                                  'trianTestLabel', 'index'], axis=1)
@@ -943,6 +947,35 @@ class TrainingDatabaseCreator(object):
         print(f'[TEST] Center: {uni[0]}, Donut: {uni[1]}, Loc: {uni[2]}, Scratch: {uni[3]}, Edge-Ring: {uni[4]}, Edge-Loc: {uni[5]}, none: {uni[6]}')
 
         print('reserved time: {:.2f}s'.format(time.time() - start_time))
+
+        gc.collect()
+        return training_database, testing_database, val_database
+
+    def get_fixed_size_dataset(self, synthesized_path_name, num_each_pattern):
+        full_real_database, synthesized_database = self.read_full_data(synthesized_path_name)
+
+        train_idx = []
+        for pattern_id in range(len(np.unique(full_real_database['failureNum']))):
+            pattern_indexes = full_real_database.index[full_real_database['failureNum'] == pattern_id].tolist()
+            sample_idx = np.random.choice(pattern_indexes, num_each_pattern, replace=False)
+            train_idx.append(sample_idx)
+
+        train_idx = np.array(train_idx).flatten()
+        training_database = full_real_database.iloc[train_idx]
+
+        val_idx = np.random.choice(np.arange(training_database.shape[0]),
+                                   int(0.4 * training_database.shape[0]),
+                                   replace=False)
+        val_database = training_database.iloc[val_idx].sample(frac=1).reset_index(drop=True)
+
+        training_database = training_database.iloc[np.delete(np.arange(training_database.shape[0]),
+                                                             val_idx)].sample(frac=1).reset_index(drop=True)
+
+        training_database = pd.concat((synthesized_database,
+                                       training_database)).sample(frac=1).reset_index(drop=True)
+
+        testing_database = full_real_database.iloc[np.delete(np.arange(full_real_database.shape[0]),
+                                                             train_idx)].sample(frac=1).reset_index(drop=True)
         gc.collect()
         return training_database, testing_database, val_database
 
@@ -1006,12 +1039,15 @@ class WaferDataset(Dataset):
 
 if __name__ == '__main__':
 
-    args = {'example_number': 3000,
-            'synthesized_path_name': 'synt_c7_3k.pkl',  # ex_num * num of classes
+    args = {'example_number': 2000,
+            'synthesized_path_name': 'synt_c7_2k.pkl',
             'image_dims': (96, 96, 1)}
 
     create_data = SynthesizedDatabaseCreator(**args)
-    create_data.create_synthesized_database()
+    create_data.create_synthesized_database(classes=7, is_noised=False)
+
+    # data = TrainingDatabaseCreator('real_g40_c6.pkl')
+    # train, test, val = data.get_fixed_size_dataset('synt_noise_c6_4k.pkl', 100)
 
     # args = {'synthesized_path_name': 'synt_noise_c7_v1.pkl',
     #         'failure_types_ratio': {'Center': 0.0,
