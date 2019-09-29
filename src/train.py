@@ -11,9 +11,10 @@ from torch import nn
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler
 from sklearn.metrics import confusion_matrix, accuracy_score
-import torchvision.models as models
+import torchvision.models as torch_models
 
 from src.logger import Logger
+from src.models import mobilenet_v2
 from src.create_data import TrainingDatabaseCreator, WaferDataset
 from src.torchutils import EarlyStopping, AdamW, CyclicLRWithRestarts
 
@@ -185,7 +186,7 @@ class TrainModel(object):
         # train, test, val = data.make_training_database(**args_make_data)
 
         data = TrainingDatabaseCreator(args.real_name)
-        train, test, val = data.get_fixed_size_dataset(args.synth_name, 100)
+        train, test, val = data.get_fixed_size_dataset(args.synth_name, args.each_rate)
 
         train_data = WaferDataset(list(train.waferMap.values),
                                   mode='train', label_list=list(train.failureNum.values),
@@ -225,12 +226,11 @@ class TrainModel(object):
 
         return True
 
-    def plot_errors(self, classes=6):
+    def plot_errors(self, model_name, classes):
         print('[INFO] Plot errors...')
         cum_loss = 0
         predicts = []
         truths = []
-        model_name = 's96_v1_ResNet34_synt_noise_c7_3k.pkl.pth'
         try:
             checkpoint = torch.load('output/weights/' + model_name)
         except FileNotFoundError:
@@ -241,6 +241,25 @@ class TrainModel(object):
         test_model = test_model.to(device)
 
         self.model.eval()
+        # for inputs, label in tqdm(self.train_loader, total=len(self.train_loader), ascii=True, desc='train'):
+        #     inputs, label = inputs.to(device), label.to(device)
+        #     with torch.set_grad_enabled(False):
+        #         out = test_model(inputs)
+        #         loss = nn.CrossEntropyLoss()(out, label)
+        #
+        #     _, y_pred = torch.max(out, 1)
+        #     predicts.append(y_pred.cpu().numpy())
+        #     truths.append(label.cpu().numpy())
+        #     cum_loss += loss.item()
+        #
+        # predicts = np.concatenate(predicts).squeeze()
+        # truths = np.concatenate(truths).squeeze()
+        # accuracy = (truths == predicts).mean()
+        # print(f"Train Accuracy: {accuracy:.6f}")
+
+        cum_loss = 0
+        predicts = []
+        truths = []
         for inputs, label in tqdm(self.test_loader, total=len(self.test_loader), ascii=True, desc='test'):
             inputs, label = inputs.to(device), label.to(device)
             with torch.set_grad_enabled(False):
@@ -254,14 +273,28 @@ class TrainModel(object):
 
         predicts = np.concatenate(predicts).squeeze()
         truths = np.concatenate(truths).squeeze()
-        accuracy = (truths == predicts).mean()
+        accuracy_mean = (truths == predicts).mean()
+        accuracy = (truths == predicts)
         val_loss = cum_loss / self.val_data.__len__()
-        from sklearn.metrics import f1_score
-        f1 = f1_score(truths, predicts, average='weighted')
+        import sklearn
+        f1 = sklearn.metrics.f1_score(truths, predicts, average='weighted')
+        precision = sklearn.metrics.precision_score(truths, predicts, average='weighted')
+        recall = sklearn.metrics.recall_score(truths, predicts, average='weighted')
 
-        print(f"Top-1 Accuracy: {accuracy:.6f}, Loss: {val_loss:.6f}, F1: {f1:.6f}")
+        print(f"Average Test: \n"
+              f"Accuracy: {accuracy_mean:.6f}, Loss: {val_loss:.6f}, F1: {f1:.6f}, Precision: {precision:.6f}, "
+              f"Recall: {recall:.6f}")
 
-        def plot_confusion_matrix(cm, normalize=False, title='Confusion matrix', cmap=plt.cm.Blues):
+        f1 = sklearn.metrics.f1_score(truths, predicts, average=None)
+        precision = sklearn.metrics.precision_score(truths, predicts, average=None)
+        recall = sklearn.metrics.recall_score(truths, predicts, average=None)
+
+        print(f"For each class: \n"
+              f"F1: {f1}\n"
+              f"Precision: {precision}\n"
+              f"Recall: {recall}\n")
+
+        def plot_confusion_matrix(cm, normalize=False, title='Confusion matrix', cmap=plt.cm.Reds):
             """
             This function prints and plots the confusion matrix.
             Normalization can be applied by setting `normalize=True`.
@@ -270,7 +303,9 @@ class TrainModel(object):
                 cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
             plt.imshow(cm, interpolation='nearest', cmap=cmap)
             plt.title(title)
-            plt.colorbar()
+            plt.rcParams.update({'font.size': 15})
+            plt.rcParams["font.family"] = "Times New Roman"
+            # plt.colorbar()
 
             fmt = '.2f' if normalize else 'd'
             thresh = cm.max() / 2.
@@ -283,10 +318,19 @@ class TrainModel(object):
             plt.ylabel('True label')
             plt.xlabel('Predicted label')
 
-        cnf_matrix = confusion_matrix(truths[:classes], predicts[:classes])
+        cnf_matrix = confusion_matrix(truths, predicts)[:classes, :classes]
         np.set_printoptions(precision=2)
 
-        _, axes = plt.subplots(nrows=1, ncols=2, figsize=(15, 6))
+        MATRIX_FOR_PRES = np.array([
+            [0.91, 0.06, 0.03, 0.01, 0.00, 0.00],
+            [0.02, 0.93, 0.02, 0.02, 0.00, 0.00],
+            [0.04, 0.03, 0.70, 0.16, 0.00, 0.07],
+            [0.01, 0.00, 0.19, 0.74, 0.01, 0.04],
+            [0.00, 0.00, 0.00, 0.00, 0.96, 0.04],
+            [0.01, 0.01, 0.09, 0.05, 0.01, 0.82]
+        ])
+
+        fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(15, 6))
         types = ['Center', 'Donut', 'Loc',
                  'Scratch', 'Edge-Ring', 'Edge-Loc',
                  'none']
@@ -311,20 +355,62 @@ class TrainModel(object):
 
         if model_name:
             plt.savefig('output/confusion_matrix/' + model_name + '.png')
-        else:
-            plt.savefig('output/confusion_matrix/' + args.weight_name + '.png')
         plt.show()
 
         return True
 
+    def plot_examples_model(self, model_name):
+        print('[INFO] Plot errors...')
+        try:
+            checkpoint = torch.load('output/weights/' + model_name)
+        except FileNotFoundError:
+            raise TypeError
+        test_model = self.model
+        test_model.load_state_dict(checkpoint)
+        test_model = test_model.to(device)
+
+        self.model.eval()
+        for inputs, label in tqdm(self.test_loader, total=len(self.test_loader), ascii=True, desc='test'):
+            inputs, label = inputs.to(device), label.to(device)
+            with torch.set_grad_enabled(False):
+                out = test_model(inputs)
+                out = torch.softmax(out, 1)
+
+            for i in range(inputs.shape[0]):
+                plt.rcParams.update({'font.size': 12})
+                plt.rcParams["font.family"] = "Times New Roman"
+                fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10.4, 5.4))
+                pred = out[i].cpu().detach().numpy()
+                types = ['Center', 'Donut', 'Loc',
+                         'Scratch', 'Edge-Ring', 'Edge-Loc',
+                         'Random']
+                ax[0].axis('off')
+                ax[0].set_title(f"True label: {types[label[i]]}\nPredicted label: {types[np.argmax(pred)]}\n",
+                                size=12)
+
+                img = inputs[i].cpu().detach().numpy()
+                ax[0].imshow(img[0], cmap='inferno')
+                ax[1].set_xlim(0, 1)
+
+                ax[1].barh(types, pred[:len(types)], color=plt.cm.inferno(np.linspace(0.52, 1, 1)))
+                ax[1].set_yticks(np.arange(len(types)))
+                ax[1].set_yticklabels(types, rotation=50, size=12)
+                ax[1].xaxis.grid(True)
+                ax[1].set_xlabel('Probability', size=12)
+                plt.show()
+
     def main(self):
         # Get Model
         is_pretrained = False
-        self.model = models.resnet34(pretrained=False, num_classes=7)
+
+        # self.model = torch_models.resnet34(pretrained=False, num_classes=7)
+        self.model = torch_models.resnet50(pretrained=False, num_classes=7)
+        # self.model = torch_models.vgg19_bn(pretrained=False, num_classes=7)
+        # self.model = mobilenet_v2(num_classes=7)
         if is_pretrained:
             try:
                 # checkpoint_1 = torch.load('output/weights/s96_v1_ResNet18_synt_c7_3k.pkl.pth')
-                checkpoint_2 = torch.load('output/weights/s96_v1_ResNet34_synt_noise_c6_4k.pkl.pth')
+                checkpoint_2 = torch.load('output/weights/s96_v1_ResNet34_synt_noise_c7_4k.pkl.pth')
                 self.model.load_state_dict(checkpoint_2)
             except FileNotFoundError:
                 raise TypeError('PRETRAINED NOT FOUND')
@@ -334,22 +420,24 @@ class TrainModel(object):
         self.load_data()  # train/val/test loaders
 
         # Start train loop
-        self.start_train()
+        # self.start_train()
 
         # Get train results
-        # self.plot_errors(classes=6)
+        # self.plot_errors(model_name='s96_r1_resnet34_synt_noise_c6_2k.pth',
+        #                  classes=6)
+        self.plot_examples_model(model_name='s96_r100_resnet50_synt_noise_c6_2k.pth')
 
         return True
 
 
 parser = argparse.ArgumentParser(description='')
-parser.add_argument('--model', default='v1_ResNet34', type=str, help='Model version')
+parser.add_argument('--model', default='resnet34', type=str, help='Model version')
 parser.add_argument('--fine_size', default=96, type=int, help='Resized image size')
 parser.add_argument('--pad_left', default=0, type=int, help='Left padding size')
 parser.add_argument('--pad_right', default=0, type=int, help='Right padding size')
 parser.add_argument('--batch_size', default=4, type=int, help='Batch size for training')
-parser.add_argument('--epoch', default=50, type=int, help='Number of training epochs')
-parser.add_argument('--snapshot', default=5, type=int, help='Number of snapshots per fold')
+parser.add_argument('--epoch', default=10, type=int, help='Number of training epochs')
+parser.add_argument('--snapshot', default=2, type=int, help='Number of snapshots per fold')
 parser.add_argument('--cuda', default=True, type=bool, help='Use cuda to train model')
 parser.add_argument('--save_weight', default='output/weights/', type=str, help='weight save space')
 parser.add_argument('--max_lr', default=1e-3, type=float, help='max learning rate')
@@ -358,8 +446,9 @@ parser.add_argument('--momentum', default=0.9, type=float, help='momentum for SG
 parser.add_argument('--weight_decay', default=1e-3, type=float, help='Weight decay for SGD')
 parser.add_argument('--patience', default=40, type=int, help='Number of epoch waiting for best score')
 
-parser.add_argument('--synth_name', default='synt_noise_c7_4k.pkl', type=str, help='Synthesized path name')
-parser.add_argument('--real_name', default='real_g40_c7.pkl', type=str, help='Real wafers path name')
+parser.add_argument('--synth_name', default='synt_noise_c6_2k.pkl', type=str, help='Synthesized path name')
+parser.add_argument('--real_name', default='real_g40_c6.pkl', type=str, help='Real wafers path name')
+parser.add_argument('--each_rate', default=120, type=float, help='Rate of real data')
 parser.add_argument('--center_rate', default=0.1, type=float, help='Center rate of real data')
 parser.add_argument('--donut_rate', default=0.1, type=float, help='Center rate of real data')
 parser.add_argument('--edge_loc_rate', default=0.1, type=float, help='Edge-Loc rate of real data')
@@ -370,7 +459,9 @@ parser.add_argument('--none_rate', default=0.1, type=float, help='Random rate of
 
 args = parser.parse_args()
 fine_size = args.fine_size + args.pad_left + args.pad_right
-args.weight_name = 's' + str(fine_size) + '_' + args.model + '_' + args.synth_name
+args.weight_name = 's' + str(fine_size) + '_r' + str(args.each_rate) + '_' +\
+                   args.model + '_' + args.synth_name
+args.weight_name = args.weight_name[:-4]
 
 if not os.path.isdir(args.save_weight):
     os.mkdir(args.save_weight)

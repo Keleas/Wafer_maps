@@ -1039,12 +1039,12 @@ class WaferDataset(Dataset):
 
 if __name__ == '__main__':
 
-    args = {'example_number': 2000,
-            'synthesized_path_name': 'synt_c7_2k.pkl',
+    args = {'example_number': 500,
+            'synthesized_path_name': 'synt_noise_c7_05k.pkl',
             'image_dims': (96, 96, 1)}
 
     create_data = SynthesizedDatabaseCreator(**args)
-    create_data.create_synthesized_database(classes=7, is_noised=False)
+    create_data.create_synthesized_database(classes=7, is_noised=True)
 
     # data = TrainingDatabaseCreator('real_g40_c6.pkl')
     # train, test, val = data.get_fixed_size_dataset('synt_noise_c6_4k.pkl', 100)
