@@ -1,38 +1,52 @@
-# Поиск паттернов на wafer maps на примере датасета WM-811K
-<h3 id="Introduction"> Data Introduction </h3>
+# Classification of Wafer Maps Defect Based on Deep Learning Methods With Small Amount of Data
 
-WM-811K — это наборы данных полупроводников, которые можно загрузить с [Kaggle](https://www.kaggle.com/qingyi/wm811k-wafer-map).
+IEEE 6th International Conference Engineering & Telecommunication – En&T-2019
 
-В полупроводниках существует много проблем, связанных с процессом, и шаблон вафельной карты из CP Yield, WAT (Wafer Acceptance Test).
+## Introduction: The Purpose of the Research
 
-Но есть большая проблема в том, как классифицировать шаблон вафельной карты на несколько групп без ручного действия. Есть много работ, чтобы рассмотреть эту проблему, и здесь я покажу результат применения глубокого обучения.
+Improvement of the quality of pattern recognition method in conditions of a deficient amount of labeled experimental data
 
-В данных содержится 811457 изображений, но только 172950 изображений с ручной меткой (всего 9 меток: 0,1,2,3,4,5,6,7,8).
+## Work Accomplished
+- Method of preparing the composite training dataset:
+  - review of typical manufacturing causes of defect patterns;
+  - procedure of synthesized wafer maps creation;
+  - adaptive configuration of training dataset.
 
-<br>Из 172950 изображений метка: 8 (none-pattern) заняла 85,2%. 
+- New learning DCNN strategy:
+  - pretrain stage on pure synthetic dataset;
+  - main train stage on composite dataset.
 
-![images](img/none_patterns.png)
+- Numerical calculations and results:
+  - DCNN model training: VGG-19, ResNet-50, ResNet-34 and MobileNetV2;
+  - experimental comparison of models accuracy on different conditions;
+  - dependence of classification accuracy on amount of experimental data.
 
-Остальные паттерны (14.8%) распределились таким образом:
+## Review of Typical Manufacturing Causes
 
-0. Center :   4294(2.5%) 
+[!review]()
 
-1. Donut :    555(0.3%) 
+[Source of experimental data](mirlab.org/dataSet/public/WM-811K.zip)
 
-2. Edge-Loc : 5189(3.0%)
+## Synthesis of Wafer Maps
 
-3. Edge-Ring : 9680(5.6%) 
+[!synthesis]()
 
-4. Loc :      3593(2.1%)
+## Experimental Comparison
 
-5. Random :   866(0.5%) 
+[!dependence]()
 
-6. Scratch :  1193(0.7%)
+## Accuracy Specification of the Top DCNN Model
 
-7. Near-full : 149(0.1%)
+[!matrix]()
 
-![images](img/8_category_pattern.png)
+## Conclusion
 
-Ссылка :
+- Proposal of the method of preparing the composite training dataset
 
-1. https://www.kaggle.com/qingyi/wm811k-wafer-map/discussion/57318#latest-338421
+- Development of the new learning DCNN model strategy which improve the final result of accuracy by 1% up to 4%
+
+- Experimental accuracy comparison of VGG-19, ResNet-50, ResNet-34 and MobileNetV2 DCNN models for the different ratio of experimental labeled data to synthesized data
+
+- Achievement of 87.8% final classification accuracy with $R_{ls}$ = 0.05 on the public dataset WM-811K by ResNet-50
+
+- Formative evaluation of needed amount of experimental data to obtain required accuracy  
