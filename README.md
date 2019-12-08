@@ -47,6 +47,6 @@ Improvement of the quality of pattern recognition method in conditions of a defi
 
 - Experimental accuracy comparison of VGG-19, ResNet-50, ResNet-34 and MobileNetV2 DCNN models for the different ratio of experimental labeled data to synthesized data
 
-- Achievement of 87.8% final classification accuracy with $R_{ls}$ = 0.05 on the public dataset WM-811K by ResNet-50
+- Achievement of 87.8% final classification accuracy with Rₗₛ = 0.05 on the public dataset WM-811K by ResNet-50
 
 - Formative evaluation of needed amount of experimental data to obtain required accuracy  
