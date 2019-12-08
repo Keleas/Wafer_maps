@@ -1,20 +1,20 @@
 # Classification of Wafer Maps Defect Based on Deep Learning Methods With Small Amount of Data
 
-IEEE 6th International Conference Engineering & Telecommunication – En&T-2019
+IEEE 6th International Conference Engineering & Telecommunication – En&T-2019 (_Forthcoming_)
 
 ## Introduction: The Purpose of the Research
 
 Improvement of the quality of pattern recognition method in conditions of a deficient amount of labeled experimental data
 
 ## Work Accomplished
-- Method of preparing the composite training dataset:
-  - review of typical manufacturing causes of defect patterns;
-  - procedure of synthesized wafer maps creation;
+- Method of preparing the __composite training dataset__:
+  - review of typical __manufacturing causes__ of defect patterns;
+  - procedure of __synthesized wafe maps__ creation;
   - adaptive configuration of training dataset.
 
 - New learning DCNN strategy:
-  - pretrain stage on pure synthetic dataset;
-  - main train stage on composite dataset.
+  - pretrain stage __on pure synthetic dataset__;
+  - main train stage __on composite dataset__.
 
 - Numerical calculations and results:
   - DCNN model training: VGG-19, ResNet-50, ResNet-34 and MobileNetV2;
@@ -41,12 +41,12 @@ Improvement of the quality of pattern recognition method in conditions of a defi
 
 ## Conclusion
 
-- Proposal of the method of preparing the composite training dataset
+- Proposal of the method of preparing the __composite training dataset__
 
-- Development of the new learning DCNN model strategy which improve the final result of accuracy by 1% up to 4%
+- Development of the __new learning DCNN model strategy__ which improve the final result of accuracy __by 1% up to 4%__
 
-- Experimental accuracy comparison of VGG-19, ResNet-50, ResNet-34 and MobileNetV2 DCNN models for the different ratio of experimental labeled data to synthesized data
+- __Experimental accuracy comparison__ of VGG-19, ResNet-50, ResNet-34 and MobileNetV2 DCNN models for the different ratio of experimental labeled data to synthesized data
 
-- Achievement of 87.8% final classification accuracy with Rₗₛ = 0.05 on the public dataset WM-811K by ResNet-50
+- Achievement of __87.8%__ final classification accuracy with Rₗₛ = 0.05 on the public dataset WM-811K by ResNet-50
 
-- Formative evaluation of needed amount of experimental data to obtain required accuracy  
+- Formative evaluation of needed amount of __experimental data__ to obtain __required accuracy__  
