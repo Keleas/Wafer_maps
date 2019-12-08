@@ -23,21 +23,21 @@ Improvement of the quality of pattern recognition method in conditions of a defi
 
 ## Review of Typical Manufacturing Causes
 
-[!review]()
+![review](img/review.png)
 
 [Source of experimental data](mirlab.org/dataSet/public/WM-811K.zip)
 
 ## Synthesis of Wafer Maps
 
-[!synthesis](img/synthesis.png)
+![synthesis](img/synthesis.png)
 
 ## Experimental Comparison
 
-[!dependence]()
+![dependence](img/dependence.png)
 
 ## Accuracy Specification of the Top DCNN Model
 
-[!matrix]()
+![matrix](img/matrix.png)
 
 ## Conclusion
 
