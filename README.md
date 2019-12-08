@@ -29,7 +29,7 @@ Improvement of the quality of pattern recognition method in conditions of a defi
 
 ## Synthesis of Wafer Maps
 
-[!synthesis]()
+[!synthesis](img/synthesis.png)
 
 ## Experimental Comparison
 
