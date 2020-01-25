@@ -140,6 +140,6 @@ logs/
 
 
 # Hiden code
-src/4PRES.ipynb
-src/4test.ipynb
-src/generate_maps_test.ipynb
+src/utils/4PRES.ipynb
+src/utils/4test.ipynb
+src/data_generation/generate_maps_test.ipynb
