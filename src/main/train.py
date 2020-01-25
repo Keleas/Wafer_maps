@@ -1,5 +1,4 @@
 import os
-import time
 import argparse
 import itertools
 import numpy as np
@@ -10,13 +9,12 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler
-from sklearn.metrics import confusion_matrix, accuracy_score
+from sklearn.metrics import confusion_matrix
 import torchvision.models as torch_models
 
-from src.logger import Logger
-from src.models import mobilenet_v2
-from src.create_data import TrainingDatabaseCreator, WaferDataset
-from src.torchutils import EarlyStopping, AdamW, CyclicLRWithRestarts
+from src.utils.logger import Logger
+from src.data_generation.create_data import TrainingDatabaseCreator, WaferDataset
+from src.utils.torchutils import EarlyStopping
 
 
 class TrainModel(object):

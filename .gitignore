@@ -124,6 +124,22 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-.idea/
+# Local changes
 logs/
-src/utils/
+.idea/
+*.csv
+*.pkl
+
+*.png
+*.jpg
+*.txt
+*.torch
+*.h5
+*.pt
+*.pth
+
+
+# Hiden code
+src/utils/4PRES.ipynb
+src/utils/4test.ipynb
+src/data_generation/generate_maps_test.ipynb
