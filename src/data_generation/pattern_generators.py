@@ -13,13 +13,12 @@ warnings.filterwarnings("ignore")
 
 
 IMAGE_DIMS = (96, 96)
-PATTERN_COLOR = 5
-DEFECT_COLOR = 2
-WAFER_COLOR = 1
-BACK_COLOR = 0
+PATTERN_COLOR = 3  # цвет паттерна (стандартный)
+DEFECT_COLOR = 2  # цвет всех дефектов
+WAFER_COLOR = 1  # цвет пластины без дефектов
+BACK_COLOR = 0  # цвет пустого поля
 
 
-# TODO: создать свой шаблон с высоким разрешением
 def load_template_map(image_dim):
     template_path = '../../input/template_wafer_map.pkl'
     template = pd.read_pickle(template_path)
@@ -33,17 +32,33 @@ def load_template_map(image_dim):
     return template
 
 
-# TODO: проверить сколько раз вызывается load_template_map в BasisGenerator при
-#       внешней инициализации шаблона и внутренней (__init__) в родительском классе
-template_map = load_template_map(IMAGE_DIMS)
+def create_zero_template_map(image_dim):
+    """
+    Создать пустой шаблон пластины
+    :param image_dim: tuple: размер пласитны в пикселях
+    :return: numpy.ndarray: шаблон пластины
+    """
+    x = np.arange(0, image_dim[0])
+    y = np.arange(0, image_dim[1])
+    arr = np.zeros((y.size, x.size))
+    cx = image_dim[0] // 2
+    cy = image_dim[1] // 2
+    r = image_dim[0] // 2
+
+    # The two lines below could be merged, but I stored the mask
+    # for code clarity.
+    mask = (x[np.newaxis, :] - cx) ** 2 + (y[:, np.newaxis] - cy) ** 2 < r ** 2
+    arr[mask] = WAFER_COLOR
+
+    return arr.astype(np.uint8)
 
 
 class BasisGenerator(object):
-    """Класс шаблон для генератора паттерна"""
+    """ Класс шаблон для генератора паттерна """
 
     def __init__(self):
         self.wafer_dims = IMAGE_DIMS  # размер пластины
-        self.template_map = template_map  # пустой шаблон пластины
+        self.template_map = create_zero_template_map(IMAGE_DIMS)  # пустой шаблон пластины
         self.pattern_color = PATTERN_COLOR  # цвет паттерна
         self.defect_color = DEFECT_COLOR  # цвет всех дефектов
         self.wafer_color = WAFER_COLOR  # цвет пластины без дефектов
@@ -61,6 +76,7 @@ class ScratchGenerator(BasisGenerator):
 
     def __init__(self):
         super(ScratchGenerator, self).__init__()
+        self.pattern_color = 10  # цвет паттерна Scratch
 
     def __call__(self, wafer=None, mask=None,
                  length=None, all_xc=None, all_yc=None, all_angle=None, part_line_count=None):
@@ -113,7 +129,7 @@ class ScratchGenerator(BasisGenerator):
         # длина всех составных частей прямой без учета линий соединения частей
         part_length = length - int(np.sum(np.linalg.norm([all_xc[1:], all_yc[1:]])))
         x_part_zero, y_part_zero = 0, 0  # кооридинаты начала составной части прямой
-        N = 50  # количество точек в прямой
+        N = 100  # количество точек в прямой
 
         """ Построить паттерн для пласитны по элементам царапины """
         for line_iteration in range(part_line_count):
@@ -169,27 +185,71 @@ class ScratchGenerator(BasisGenerator):
 
 
 class PoisonGenerator(BasisGenerator):
-    """Класс для добавления Пуассоновского точечного процесса на пластину"""
+    """ Класс для добавления Пуассоновского точечного процесса на пластину """
+
     def __init__(self):
         super(PoisonGenerator, self).__init__()
+        self.pattern_color = 4
 
     # TODO: заложить два функционала:
-    #       1) случайный локальный процесс вдоль заданной маски паттерна
+    #       1) случайный локальный процесс вдоль заданной маски для каждого слоя паттерна
     #       2) случайны локальный процесс на всей пластине
     def __call__(self, wafer=None, mask=None,
                  *args, **kwargs):
-        pass
+        h, w, dims = mask.shape
+
+        # по каждому слою паттерна
+        for dim in range(dims):
+            mask_layer = mask[:, :, dim]
+            points = np.argwhere(mask_layer > 0)
+
+            window_step = 3
+            window_size = 5
+            lam_poisson = 2.1
+            layer_color = np.max(mask_layer)
+            for x, y in points[::5]:
+                try:
+                    window = mask[abs(y-window_size):y+window_size, abs(x-window_size):x+window_size]
+
+                    noise_img = window.copy()
+                    noise_mask = np.random.randint(0, 2, size=noise_img.shape).astype(np.bool)
+                    noise_mask[noise_img == 0] = False
+                    r = np.random.poisson(lam=lam_poisson, size=noise_img.shape)
+                    # нормировка на величину шума
+                    # print(r)
+                    # r[r == self.back_color] = self.wafer_color
+                    r[r > self.wafer_color] = layer_color
+                    noise_img[noise_mask] = r[noise_mask]
+
+                    mask[abs(y - window_size):y + window_size, abs(x - window_size):x + window_size] = noise_img
+                except IndexError:
+                    continue
+
+        return wafer, mask
 
 
 class MorphNoiseGenerator(BasisGenerator):
-    """Класс для добавления шумов на пластину"""
+    """ Класс для добавления шумов на пластину """
+
     def __init__(self):
         super(MorphNoiseGenerator, self).__init__()
+        self.pattern_color = 5
 
-    # TODO: перенести функцию добавления шума с помощью морфологических операций
+    # TODO: перенести функцию добавления шума с помощью морфологических операций для каждого слоя паттерна
     def __call__(self, wafer=None, mask=None,
                  *args, **kwargs):
-        pass
+        noise_wafer, noise_mask = self.noise_simple(wafer, mask, dilate_time=1)
+
+        return noise_wafer, noise_mask
+
+    @staticmethod
+    def noise_simple(wafer, mask, dilate_time=1):
+        kernel2 = np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]], dtype=np.uint8)
+        count_iter = random.randint(1, dilate_time)
+        wafer = cv2.dilate(wafer, kernel2, iterations=count_iter)
+        mask = cv2.dilate(mask, kernel2, iterations=count_iter)
+
+        return wafer, mask
 
 
 def mask_for_visualize(mask):
@@ -212,8 +272,10 @@ def mask_for_visualize(mask):
 if __name__ == '__main__':
     """ Проверка функций """
     scratch_generator = ScratchGenerator()  # тестовый генератор
+    morph_generator = MorphNoiseGenerator()
+    poison_generator = PoisonGenerator()
 
-    example_count = 10  # примеров для тестирования
+    example_count = 1  # примеров для тестирования
     for i in range(example_count):
         fig, maxs = plt.subplots(1, 2, figsize=(10, 7))
 
@@ -222,8 +284,13 @@ if __name__ == '__main__':
         pattern_count = 4  # количество паттернов на пластине
         for i in range(pattern_count):
             wafer, mask = scratch_generator(wafer, mask)
+            wafer, mask = poison_generator(wafer, mask)
+            # wafer, mask = morph_generator(wafer, mask)
 
         # отрисовать результат
         maxs[0].imshow(wafer, cmap='inferno')
         maxs[1].imshow(mask_for_visualize(mask), cmap='inferno')
         plt.show()
+
+    # plt.imshow(create_zero_template_map(IMAGE_DIMS))
+    # plt.show()
