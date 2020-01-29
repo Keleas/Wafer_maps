@@ -63,7 +63,7 @@ class ScratchGenerator(BasisGenerator):
         super(ScratchGenerator, self).__init__()
 
     def __call__(self, wafer=None, mask=None,
-                 length=None, all_xc=None, all_yc=None, all_angle=None, part_line_count=None):
+                 length=None, line_weight=None, all_xc=None, all_yc=None, all_angle=None, part_line_count=None):
         """
         Сгенерировать паттерн "Scratch" на заданной пластине.
         :param wafer: np.ndarray: пластина для нанесения паттерна
@@ -80,6 +80,10 @@ class ScratchGenerator(BasisGenerator):
         # если пластина не задана, применить паттерн к пустому шаблону
         if wafer is None:
             wafer = deepcopy(self.template_map)
+
+        if line_weight is None:
+            # если толщина царапины не задана — применить толщину по умолчанию в 1 пиксель
+            line_weight = 6.0
 
         if part_line_count is None:
             # задать количество составных прямых для генерации паттерна
@@ -135,7 +139,14 @@ class ScratchGenerator(BasisGenerator):
                     x_first, y_first = _x, _y  # первая точка составной прямой
                 try:
                     if wafer[_x, _y] == self.wafer_color:  # расположение место пластины
-                        wafer[_x, _y] = self.pattern_color
+                        l_w_1 = int(np.floor(line_weight / 2.0))  # с одной стороны от точки толщина линии
+                        l_w_2 = int(np.ceil(line_weight / 2.0))  # c другой
+                        wafer[_x - l_w_1: _x + l_w_2, _y - l_w_1:_y + l_w_2]\
+                            = np.where(
+                            wafer[_x - l_w_1:_x + l_w_2, _y - l_w_1:_y + l_w_2]
+                            == self.wafer_color,
+                            self.pattern_color,
+                            wafer[_x - l_w_1:_x + l_w_2, _y - l_w_1:_y + l_w_2])
                         x_part_zero, y_part_zero = _x, _y
                 except IndexError:  # закончить построение при выходе за границы пластины
                     break
