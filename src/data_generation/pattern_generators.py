@@ -129,7 +129,7 @@ class ScratchGenerator(BasisGenerator):
 
         if line_weight is None:
             # если толщина царапины не задана — применить толщину по умолчанию в 1 пиксель
-            line_weight = 1.0
+            line_weight = 5.0
 
         # длина всех составных частей прямой без учета линий соединения частей
         part_length = length - int(np.sum(np.linalg.norm([all_xc[1:], all_yc[1:]])))
@@ -156,14 +156,15 @@ class ScratchGenerator(BasisGenerator):
                     x_first, y_first = _x, _y  # первая точка составной прямой
                 try:
                     if wafer[_x, _y] == self.wafer_color:  # расположение место пластины
-                        l_w_1 = int(np.floor(line_weight / 2.0))  # с одной стороны от точки толщина линии
-                        l_w_2 = int(np.ceil(line_weight / 2.0))  # c другой
-                        wafer[_x - l_w_1: _x + l_w_2, _y - l_w_1:_y + l_w_2]\
-                            = np.where(
-                            wafer[_x - l_w_1:_x + l_w_2, _y - l_w_1:_y + l_w_2]
-                            == self.wafer_color,
-                            self.pattern_color,
-                            wafer[_x - l_w_1:_x + l_w_2, _y - l_w_1:_y + l_w_2])
+                        low_weight = int(np.floor(line_weight / 2.0))  # большая часть толщины линии
+                        high_weight = int(np.ceil(line_weight / 2.0))  # меньшая часть толщины линии
+                        #_slice = slice(_x - low_weight: _x + high_weight,  _y - low_weight:_y + high_weight)
+                        temp_window = wafer[_x - low_weight: _x + high_weight, _y - low_weight:_y + high_weight]
+                        # окно для отрисовки участка линии (отдельная переменная для повышения читабельности кода)
+                        temp_window = np.where(temp_window == self.wafer_color, self.pattern_color, temp_window)
+                        # отрисовываем часть линии, если мы на пластине
+                        wafer[_x - low_weight: _x + high_weight, _y - low_weight:_y + high_weight] = temp_window
+                        del temp_window
                         x_part_zero, y_part_zero = _x, _y
                 except IndexError:  # закончить построение при выходе за границы пластины
                     break
@@ -186,6 +187,21 @@ class ScratchGenerator(BasisGenerator):
         # выделить маску паттерна
         pattern_mask = deepcopy(wafer)
         pattern_mask[pattern_mask != self.pattern_color] = self.back_color
+
+        # временное решение — замена морфологических операций
+        # формируем пуассоновкие точки от 0 до 1
+        random_poisson = np.random.poisson(lam=0.7, size=pattern_mask.shape)
+        random_poisson = random_poisson / np.amax(random_poisson)
+
+        # накладываем на объект и очищаем малые значения
+        pattern_mask = pattern_mask + random_poisson
+        pattern_mask[pattern_mask <= self.pattern_color] = self.back_color
+        pattern_mask[pattern_mask > self.pattern_color] = self.pattern_color - self.wafer_color
+
+        # вырезаем оригинальный паттерн и накладываемый новый "шумный"
+        wafer[wafer == self.pattern_color] = self.wafer_color
+        wafer = wafer + pattern_mask
+
         if mask is None:
             mask = np.expand_dims(pattern_mask, axis=2)
         else:
