@@ -68,24 +68,24 @@ class BasisGenerator(object):
         else:
             return wafer
 
-    def pattern_regularization(self, wafer, pattern_mask, lam_poison):
+    def pattern_regularization(self, wafer, pattern_mask, lam_poisson):
         """
         Регуляризаци дефекта с помощью пуассоновсокго точечного процесса вдоль маски дефекта
         :param wafer: np.ndarray: пластина для нанесения паттерна
         :param mask: np.ndarray: маска дефекта
-        :param lam_poison: float: величина лямбды в распределении Пуассона
+        :param lam_poisson: float: величина лямбды в распределении Пуассона
         :return: np.ndarray, np.ndarray: пластина с паттерном и маска паттерна
         """
         # сформировать пуассоновкие точки от 0 до 1
-        random_poisson = np.random.poisson(lam=lam_poison, size=pattern_mask.shape)
+        random_poisson = np.random.poisson(lam=lam_poisson, size=pattern_mask.shape)
         random_poisson = random_poisson / np.amax(random_poisson)
 
-        # наложить на объект и очищаем малые значения
+        # наложить на объект и очистить малые значения
         pattern_mask = pattern_mask + random_poisson
         pattern_mask[pattern_mask <= self.pattern_color] = self.back_color
         pattern_mask[pattern_mask > self.pattern_color] = self.pattern_color - self.wafer_color
 
-        # вырезать оригинальный паттерн и накладываемый новый "шумный"
+        # вырезать оригинальный паттерн и наложить новый "шумный"
         wafer[wafer == self.pattern_color] = self.wafer_color
         wafer = wafer + pattern_mask
 
@@ -99,14 +99,14 @@ class ScratchGenerator(BasisGenerator):
         super(ScratchGenerator, self).__init__()
         self.pattern_color = 10  # цвет паттерна Scratch
 
-    def __call__(self, wafer=None, mask=None, is_noise=False, lam_poison=1.2,
+    def __call__(self, wafer=None, mask=None, is_noise=False, lam_poisson=1.2,
                  length=None, line_weight=None, all_xc=None, all_yc=None, all_angle=None, part_line_count=None):
         """
         Сгенерировать паттерн "Scratch" на заданной пластине.
         :param wafer: np.ndarray: пластина для нанесения паттерна
         :param mask: np.ndarray: маска дефекта
         :param is_noise: bool: если True добавить регуляризацию на паттерн, False - ничего не делать
-        :param lam_poison: float: величина лямбды в распределении Пуассона
+        :param lam_poisson: float: величина лямбды(частота событий) в распределении Пуассона
         :param length: int: длина паттерна "Scratch"
         :param line_weight: int: толщина паттерна "Scratch"
         :param all_xc: list: список точек (по x) старта для каждой составной части прямой
@@ -181,7 +181,6 @@ class ScratchGenerator(BasisGenerator):
                     if wafer[_x, _y] == self.wafer_color:  # расположение место пластины
                         low_weight = int(np.floor(line_weight / 2.0))  # большая часть толщины линии
                         high_weight = int(np.ceil(line_weight / 2.0))  # меньшая часть толщины линии
-                        #_slice = slice(_x - low_weight: _x + high_weight,  _y - low_weight:_y + high_weight)
                         temp_window = wafer[_x - low_weight: _x + high_weight, _y - low_weight:_y + high_weight]
                         # окно для отрисовки участка линии (отдельная переменная для повышения читабельности кода)
                         temp_window = np.where(temp_window == self.wafer_color, self.pattern_color, temp_window)
@@ -213,7 +212,7 @@ class ScratchGenerator(BasisGenerator):
 
         # регуляризация дефекта с помощью шума
         if is_noise:
-            wafer, pattern_mask = self.pattern_regularization(wafer, pattern_mask, lam_poison)
+            wafer, pattern_mask = self.pattern_regularization(wafer, pattern_mask, lam_poisson)
 
         # добавить в маске слой для нового цвета
         if mask is None:
@@ -226,30 +225,156 @@ class ScratchGenerator(BasisGenerator):
         return wafer, mask
 
 
+class RingGenerator(BasisGenerator):
+    """ Класс для формирования колец для добавления паттернов "Donut", "Edge-Ring", "Center" etc на пластину """
+
+    def __init__(self):
+        super(RingGenerator, self).__init__()
+        self.pattern_color = 11
+
+    def pattern_params(self, pattern_type=None, x_center=None, y_center=None, N=None,
+                       sector_angle_start=None, sector_angle_end=None, radius_inner=None, radius_outer=None):
+        """
+        Параметры для генерация паттерна
+        :param pattern_type: str: класс паттерна ("Donut", "Edge-Ring", "Loc", "Edge-Loc", "Center")
+        :param x_center: int: центр кольца по X
+        :param y_center: int: центр кольца по Y
+        :param N: TODO заполнить что это
+        :param sector_angle_start: float: начало сектора кольца
+        :param sector_angle_end: float: начало сектора кольца
+        :param radius_inner: int: внутренний радиус кольца
+        :param radius_outer: int: наружный радиус кольца
+        :return: все параметры TODO мб переделать под без вывода, чтобы просто он запрашивал у функции
+        """
+        if pattern_type is None:
+            pattern_type == "Donut"  #TODO Заменить на ошибку?
+        if pattern_type == "Donut":
+
+            rand_sector = np.random.randint(0, 4)
+            self.pattern_color = 12
+
+            if sector_angle_start is None:
+                # угол старта для сектора
+                sector_angle_start = np.random.uniform(0 + 95 * rand_sector, 30 + 95 * rand_sector) * np.pi / 180
+            if sector_angle_end is None:
+                # угол конца для сектора
+                sector_angle_end = np.random.uniform(180 + 90 * rand_sector, 360 * (rand_sector + 1)) * np.pi / 180
+
+            if x_center is None:
+                # X координата центра
+                x_center = np.random.randint(0.45 * self.wafer_dims[0], 0.55 * self.wafer_dims[0])
+            if y_center is None:
+                # Y координата центра
+                y_center = np.random.randint(0.45 * self.wafer_dims[0], 0.55 * self.wafer_dims[0])
+
+            if N is None:
+                #TODO Переименовать
+                N = np.random.randint(200, 210)
+
+            if radius_inner is None:
+                # радиус внутреннего круга
+                radius_inner = np.random.randint(0.15 * self.wafer_dims[0], 0.3 * self.wafer_dims[0])
+            if radius_outer is None:
+                # радиус внешнего круга
+                radius_outer = np.random.randint(0.33 * self.wafer_dims[0], 0.4 * self.wafer_dims[0])
+
+            return x_center, y_center, sector_angle_start, sector_angle_end, N, radius_inner, radius_outer
+
+    def __call__(self, wafer=None, mask=None, is_noise=False, lam_poisson=1.0, pattern_type=None):
+        """
+        Сгенерировать один из паттернов "Donut", "Edge-Ring", "Loc", "Edge-Loc", "Center" на заданной пластине
+        :param wafer: np.ndarray: пластина для нанесения паттерна
+        :param mask: np.ndarray: маска дефекта
+        :param is_noise: bool: если True добавить регуляризацию на паттерн, False - ничего не делать
+        :param lam_poisson: float: величина лямбды(частота событий) в распределении Пуассона
+        :param pattern_type: str: класс паттерна ("Donut", "Edge-Ring", "Loc", "Edge-Loc", "Center")
+        :return: np.ndarray, np.ndarray: пластина с паттерном и маска паттерна
+        """
+
+        """ Задать параметры синтеза колец, если они не заданы пользавателем """
+        # если пластина не задана, применить паттерн к пустому шаблону
+        if wafer is None:
+            wafer = deepcopy(self.template_map)
+
+        ########################
+        # данные в зависимости от паттерна
+        x_center, y_center, sector_angle_start, sector_angle_end, N, radius_inner, radius_outer = \
+            self.pattern_params(pattern_type=pattern_type)
+
+        # параметры кольца, объединяем
+        sector_angle = np.linspace(sector_angle_start, sector_angle_end, N)
+        radius_ring = np.linspace(radius_inner, radius_outer, N)
+
+        # синтез сетки
+        R, Fi = np.meshgrid(radius_ring, sector_angle)
+        X = R * (np.cos(Fi)) + x_center
+        Y = R * (np.sin(Fi)) + y_center
+        X_ = np.around(X)
+        Y_ = np.around(Y)
+
+        # индексы для полигона
+        points = []
+        print(X_.shape)
+        for x_ in range(X_.shape[0]):
+            for y_ in range(X_.shape[1]):
+                x = X_[x_, y_]
+                y = Y_[x_, y_]
+                points.append((x, y))
+
+        for idx in points:
+            x_, y_ = idx
+            x_ = int(round(x_))
+            y_ = int(round(y_))
+            try:
+                if wafer[x_, y_] == self.wafer_color:
+                    wafer[x_, y_] = self.pattern_color
+            except IndexError:
+                break
+
+        # выделить маску паттерна
+        pattern_mask = deepcopy(wafer)
+        pattern_mask[pattern_mask != self.pattern_color] = self.back_color
+
+        # регуляризация дефекта с помощью шума
+        if is_noise:
+            wafer, pattern_mask = self.pattern_regularization(wafer, pattern_mask, lam_poisson)
+
+        # добавить в маске слой для нового цвета
+        if mask is None:
+            mask = np.expand_dims(pattern_mask, axis=2)
+        else:
+            mask = np.dstack((mask, pattern_mask))
+
+        wafer[wafer == self.pattern_color] = self.defect_color  # нормировка значений
+
+        return wafer, mask
+
+###########################
+
 class NoiseGenerator(BasisGenerator):
     """ Класс для добавления шумов на пластину """
 
     def __init__(self):
         super(NoiseGenerator, self).__init__()
 
-    def __call__(self, wafer=None, mask=None, lam_poison=0.3, **kwargs):
+    def __call__(self, wafer=None, mask=None, lam_poisson=0.3, **kwargs):
         """
         Внести шум на пластину
         :param wafer: np.ndarray: пластина для нанесения паттерна
         :param mask: np.ndarray: маска дефекта
-        :param lam_poison: float: величина лямбды в распределении Пуассона
+        :param lam_poisson: float: величина лямбды в распределении Пуассона
         :return: np.ndarray, np.ndarray: пластина с паттерном и маска паттерна
         """
-        noise_wafer, mask = self.noise_poison(wafer, mask, lam_poison=lam_poison)
+        noise_wafer, mask = self.noise_poisson(wafer, mask, lam_poisson=lam_poisson)
 
         return noise_wafer, mask
 
-    def noise_poison(self, wafer, mask, lam_poison=0.3):
+    def noise_poisson(self, wafer, mask, lam_poisson=0.3):
         """
         Внести случайный шум на карту с помощью пуассоновсокого точечного процесса
         :param wafer: np.ndarray: пластина для нанесения паттерна
         :param mask: np.ndarray: маска дефекта
-        :param lam_poison: float: величина лямбды в распределении Пуассона
+        :param lam_poisson: float: величина лямбды в распределении Пуассона
         :return: np.ndarray, np.ndarray: пластина с паттерном и маска паттерна
         """
 
@@ -262,15 +387,15 @@ class NoiseGenerator(BasisGenerator):
         noise_mask = np.random.randint(0, 2, size=noise_img.shape).astype(np.bool)
         noise_mask[noise_img == 0] = False
         # случайное распределение шума
-        r = np.random.poisson(lam=lam_poison, size=noise_img.shape)
+        r = np.random.poisson(lam=lam_poisson, size=noise_img.shape)
 
         r[r == self.back_color] = self.wafer_color  # убрать значения с области фона
         r[r > self.defect_color] = self.defect_color  # нормировать все значения на цвет дефекта
-        noise_img[noise_mask] = r[noise_mask]  # рименить шум
+        noise_img[noise_mask] = r[noise_mask]  # применить шум
 
         # вернуть дефект с каждого слоя маски
         for layer in range(mask.shape[2]):
-            noise_img[mask[:,:, layer] > self.back_color] = self.defect_color
+            noise_img[mask[:, :, layer] > self.back_color] = self.defect_color
 
         return noise_img, mask
 
@@ -296,6 +421,7 @@ if __name__ == '__main__':
     """ Проверка функций """
     scratch_generator = ScratchGenerator()  # тестовый генератор
     morph_generator = NoiseGenerator()
+    ring_generator = RingGenerator()
 
     example_count = 5  # примеров для тестирования
     for i in range(example_count):
@@ -303,9 +429,10 @@ if __name__ == '__main__':
 
         # сгенерировать несколько паттернов на одной пластине
         wafer, mask = None, None
-        pattern_count = 4  # количество паттернов на пластине
+        pattern_count = 1  # количество паттернов на пластине
         for i in range(pattern_count):
-            wafer, mask = scratch_generator(wafer, mask, line_weight=1, is_noise=True, lam_poison=1.7)
+            #wafer, mask = scratch_generator(wafer, mask, line_weight=1, is_noise=True, lam_poisson=1.7)
+            wafer, mask = ring_generator(wafer, mask, pattern_type="Donut", is_noise=True)
             wafer, mask = morph_generator(wafer, mask)
 
         # отрисовать результат
