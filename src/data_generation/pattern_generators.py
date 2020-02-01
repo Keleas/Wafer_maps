@@ -232,11 +232,10 @@ class RingGenerator(BasisGenerator):
         super(RingGenerator, self).__init__()
         self.pattern_color = 11
 
-    def pattern_params(self, pattern_type=None, x_center=None, y_center=None, N=None,
+    def donut_params(self, x_center=None, y_center=None, N=None,
                        sector_angle_start=None, sector_angle_end=None, radius_inner=None, radius_outer=None):
         """
-        Параметры для генерация паттерна
-        :param pattern_type: str: класс паттерна ("Donut", "Edge-Ring", "Loc", "Edge-Loc", "Center")
+        Параметры для генерация паттерна "Donut"
         :param x_center: int: центр кольца по X
         :param y_center: int: центр кольца по Y
         :param N: TODO заполнить что это
@@ -246,41 +245,187 @@ class RingGenerator(BasisGenerator):
         :param radius_outer: int: наружный радиус кольца
         :return: все параметры TODO мб переделать под без вывода, чтобы просто он запрашивал у функции
         """
-        if pattern_type is None:
-            pattern_type == "Donut"  #TODO Заменить на ошибку?
-        if pattern_type == "Donut":
 
-            rand_sector = np.random.randint(0, 4)
-            self.pattern_color = 12
+        rand_sector = np.random.randint(0, 4)
+        self.pattern_color = 12
 
-            if sector_angle_start is None:
-                # угол старта для сектора
-                sector_angle_start = np.random.uniform(0 + 95 * rand_sector, 30 + 95 * rand_sector) * np.pi / 180
-            if sector_angle_end is None:
-                # угол конца для сектора
-                sector_angle_end = np.random.uniform(180 + 90 * rand_sector, 360 * (rand_sector + 1)) * np.pi / 180
+        if sector_angle_start is None:
+            sector_angle_start = np.random.uniform(95 * rand_sector, 30 + 95 * rand_sector) * np.pi / 180
+        if sector_angle_end is None:
+            sector_angle_end = np.random.uniform(180 + 90 * rand_sector, 360 * (rand_sector + 1)) * np.pi / 180
 
-            if x_center is None:
-                # X координата центра
-                x_center = np.random.randint(0.45 * self.wafer_dims[0], 0.55 * self.wafer_dims[0])
-            if y_center is None:
-                # Y координата центра
-                y_center = np.random.randint(0.45 * self.wafer_dims[0], 0.55 * self.wafer_dims[0])
+        if x_center is None:
+            x_center = np.random.randint(0.45 * self.wafer_dims[0], 0.55 * self.wafer_dims[0])
+        if y_center is None:
+            y_center = np.random.randint(0.45 * self.wafer_dims[0], 0.55 * self.wafer_dims[0])
 
-            if N is None:
-                #TODO Переименовать
-                N = np.random.randint(200, 210)
+        if N is None:
+            #TODO Переименовать
+            N = np.random.randint(200, 210)
 
-            if radius_inner is None:
-                # радиус внутреннего круга
-                radius_inner = np.random.randint(0.15 * self.wafer_dims[0], 0.3 * self.wafer_dims[0])
-            if radius_outer is None:
-                # радиус внешнего круга
-                radius_outer = np.random.randint(0.33 * self.wafer_dims[0], 0.4 * self.wafer_dims[0])
+        if radius_inner is None:
+            radius_inner = np.random.randint(0.15 * self.wafer_dims[0], 0.3 * self.wafer_dims[0])
+        if radius_outer is None:
+            radius_outer = np.random.randint(0.33 * self.wafer_dims[0], 0.4 * self.wafer_dims[0])
 
-            return x_center, y_center, sector_angle_start, sector_angle_end, N, radius_inner, radius_outer
+        return x_center, y_center, sector_angle_start, sector_angle_end, N, radius_inner, radius_outer
 
-    def __call__(self, wafer=None, mask=None, is_noise=False, lam_poisson=1.0, pattern_type=None):
+    def loc_params(self, x_center=None, y_center=None, N=None,
+                       sector_angle_start=None, sector_angle_end=None, radius_inner=None, radius_outer=None):
+        """
+        Параметры для генерация паттерна "Loc" TODO поработать на улучшением репрезантативности(после консультации)
+        :param x_center: int: центр кольца по X
+        :param y_center: int: центр кольца по Y
+        :param N: TODO заполнить что это
+        :param sector_angle_start: float: начало сектора кольца
+        :param sector_angle_end: float: начало сектора кольца
+        :param radius_inner: int: внутренний радиус кольца
+        :param radius_outer: int: наружный радиус кольца
+        :return: все параметры TODO мб переделать под без вывода, чтобы просто он запрашивал у функции
+        """
+
+        rand_sector = np.random.randint(0, 4)
+        self.pattern_color = 13
+
+        if sector_angle_start is None:
+            sector_angle_start = np.random.uniform(95 * rand_sector, 55 + 90 * rand_sector) * np.pi / 180
+        if sector_angle_end is None:
+            sector_angle_end = np.random.uniform(65 + 90 * rand_sector, 95 * (rand_sector + 1)) * np.pi / 180
+
+        if x_center is None:
+            x_center = np.random.randint(0.45 * self.wafer_dims[0], 0.55 * self.wafer_dims[0])
+        if y_center is None:
+            y_center = np.random.randint(0.45  * self.wafer_dims[0], 0.55  * self.wafer_dims[0])
+
+        if N is None:
+            #TODO Переименовать
+            N = np.random.randint(200, 210)
+
+        if radius_inner is None:
+            radius_inner = np.random.randint(0.1 * self.wafer_dims[0], 0.2 * self.wafer_dims[0])
+        if radius_outer is None:
+            radius_outer = np.random.randint(0.2 * self.wafer_dims[0], 0.25 * self.wafer_dims[0])
+
+        return x_center, y_center, sector_angle_start, sector_angle_end, N, radius_inner, radius_outer
+
+    def center_params(self, x_center=None, y_center=None, N=None,
+                       sector_angle_start=None, sector_angle_end=None, radius_inner=None, radius_outer=None):
+        """
+        Параметры для генерация паттерна "Center"
+        :param x_center: int: центр кольца по X
+        :param y_center: int: центр кольца по Y
+        :param N: TODO заполнить что это
+        :param sector_angle_start: float: начало сектора кольца
+        :param sector_angle_end: float: начало сектора кольца
+        :param radius_inner: int: внутренний радиус кольца
+        :param radius_outer: int: наружный радиус кольца
+        :return: все параметры TODO мб переделать под без вывода, чтобы просто он запрашивал у функции
+        """
+
+        rand_sector = np.random.randint(0, 4)
+        self.pattern_color = 14
+
+        if sector_angle_start is None:
+            sector_angle_start = np.random.uniform(95 * rand_sector, 10 + 95 * rand_sector) * np.pi / 180
+        if sector_angle_end is None:
+            sector_angle_end = np.random.uniform(45 + 90 * rand_sector, 95 * (rand_sector + 1)) * np.pi / 180
+
+        if x_center is None:
+            x_center = np.random.randint(0.48 * self.wafer_dims[0], 0.50 * self.wafer_dims[0])
+        if y_center is None:
+            y_center = np.random.randint(0.48 * self.wafer_dims[0], 0.50 * self.wafer_dims[0])
+
+        if N is None:
+            #TODO Переименовать
+            N = np.random.randint(200, 210)
+
+        if radius_inner is None:
+            radius_inner = np.random.randint(0.0 * self.wafer_dims[0], 0.05 * self.wafer_dims[0])
+        if radius_outer is None:
+            radius_outer = np.random.randint(0.12 * self.wafer_dims[0], 0.23 * self.wafer_dims[0])
+
+        return x_center, y_center, sector_angle_start, sector_angle_end, N, radius_inner, radius_outer
+
+    def edge_ring_params(self, x_center=None, y_center=None, N=None,
+                       sector_angle_start=None, sector_angle_end=None, radius_inner=None, radius_outer=None):
+        """
+        Параметры для генерация паттерна "Edge-ring"
+        :param x_center: int: центр кольца по X
+        :param y_center: int: центр кольца по Y
+        :param N: TODO заполнить что это
+        :param sector_angle_start: float: начало сектора кольца
+        :param sector_angle_end: float: начало сектора кольца
+        :param radius_inner: int: внутренний радиус кольца
+        :param radius_outer: int: наружный радиус кольца
+        :return: все параметры TODO мб переделать под без вывода, чтобы просто он запрашивал у функции
+        """
+
+        rand_sector = np.random.randint(0, 4)
+        self.pattern_color = 15
+        center = 0.5 * self.wafer_dims[0]
+
+        if sector_angle_start is None:
+            sector_angle_start = np.random.uniform(90 * rand_sector, 30 + 90 * rand_sector) * np.pi / 180
+        if sector_angle_end is None:
+            sector_angle_end = np.random.uniform(320 + 90 * rand_sector, 360 * (rand_sector + 1)) * np.pi / 180
+
+        if x_center is None:
+            x_center = np.random.randint(center - 2, center)
+        if y_center is None:
+            y_center = np.random.randint(center - 2, center)
+
+        if N is None:
+            #TODO Переименовать
+            N = np.random.randint(200, 210)
+
+        if radius_inner is None:
+            radius_inner = np.random.randint(center - 4, center - 3)
+        if radius_outer is None:
+            radius_outer = np.random.randint(center, center+1)
+
+        return x_center, y_center, sector_angle_start, sector_angle_end, N, radius_inner, radius_outer
+
+    def edge_loc_params(self, x_center=None, y_center=None, N=None,
+                       sector_angle_start=None, sector_angle_end=None, radius_inner=None, radius_outer=None):
+        """
+        Параметры для генерация паттерна "Edge-loc"
+        :param x_center: int: центр кольца по X
+        :param y_center: int: центр кольца по Y
+        :param N: TODO заполнить что это
+        :param sector_angle_start: float: начало сектора кольца
+        :param sector_angle_end: float: начало сектора кольца
+        :param radius_inner: int: внутренний радиус кольца
+        :param radius_outer: int: наружный радиус кольца
+        :return: все параметры TODO мб переделать под без вывода, чтобы просто он запрашивал у функции
+        """
+
+        rand_sector = np.random.randint(0, 4)
+        self.pattern_color = 15
+        center = 0.5 * self.wafer_dims[0]
+
+        if sector_angle_start is None:
+            sector_angle_start = np.random.uniform(15 + 90 * rand_sector, 25 + 90 * rand_sector) * np.pi / 180
+        if sector_angle_end is None:
+            sector_angle_end = np.random.uniform(55 + 90 * rand_sector, 115 + 90 * (rand_sector + 1)) * np.pi / 180
+
+        if x_center is None:
+            x_center = np.random.randint(center - 2, center + 1)
+        if y_center is None:
+            y_center = np.random.randint(center - 2, center + 1)
+
+        if N is None:
+            #TODO Переименовать
+            N = np.random.randint(200, 210)
+
+        if radius_inner is None:
+            radius_inner = np.random.randint(center - 5, center - 3)
+        if radius_outer is None:
+            radius_outer = np.random.randint(center, center+1)
+
+        return x_center, y_center, sector_angle_start, sector_angle_end, N, radius_inner, radius_outer
+
+
+    def __call__(self, wafer=None, mask=None, is_noise=False, lam_poisson=1.5, pattern_type=None):
         """
         Сгенерировать один из паттернов "Donut", "Edge-Ring", "Loc", "Edge-Loc", "Center" на заданной пластине
         :param wafer: np.ndarray: пластина для нанесения паттерна
@@ -296,19 +441,27 @@ class RingGenerator(BasisGenerator):
         if wafer is None:
             wafer = deepcopy(self.template_map)
 
-        ########################
+        pattern_params = { #TODO Внести по умолчанию или ошибку Undefined Pattern
+            'Donut': self.donut_params(),
+            'Loc': self.loc_params(),
+            'Center': self.center_params(),
+            'Edge-Ring': self.edge_loc_params(),
+            'Edge-Loc': self.edge_loc_params()
+        }
+
+        ######################## TODO Прокомментировать алгоритм
         # данные в зависимости от паттерна
         x_center, y_center, sector_angle_start, sector_angle_end, N, radius_inner, radius_outer = \
-            self.pattern_params(pattern_type=pattern_type)
+            pattern_params[pattern_type]
 
         # параметры кольца, объединяем
         sector_angle = np.linspace(sector_angle_start, sector_angle_end, N)
         radius_ring = np.linspace(radius_inner, radius_outer, N)
 
         # синтез сетки
-        R, Fi = np.meshgrid(radius_ring, sector_angle)
-        X = R * (np.cos(Fi)) + x_center
-        Y = R * (np.sin(Fi)) + y_center
+        radius_ring_, sector_angle_ = np.meshgrid(radius_ring, sector_angle)
+        X = radius_ring_ * (np.cos(sector_angle_)) + x_center
+        Y = radius_ring_ * (np.sin(sector_angle_)) + y_center
         X_ = np.around(X)
         Y_ = np.around(Y)
 
