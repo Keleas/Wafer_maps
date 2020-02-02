@@ -9,8 +9,8 @@ from copy import deepcopy
 import matplotlib.pyplot as plt
 
 import warnings
-warnings.filterwarnings("ignore")
 
+warnings.filterwarnings("ignore")
 
 IMAGE_DIMS = (96, 96)
 PATTERN_COLOR = 3  # цвет паттерна (стандартный)
@@ -72,7 +72,7 @@ class BasisGenerator(object):
         """
         Регуляризаци дефекта с помощью пуассоновсокго точечного процесса вдоль маски дефекта
         :param wafer: np.ndarray: пластина для нанесения паттерна
-        :param mask: np.ndarray: маска дефекта
+        :param pattern_mask: np.ndarray: маска дефекта
         :param lam_poisson: float: величина лямбды в распределении Пуассона
         :return: np.ndarray, np.ndarray: пластина с паттерном и маска паттерна
         """
@@ -232,18 +232,18 @@ class RingGenerator(BasisGenerator):
         super(RingGenerator, self).__init__()
         self.pattern_color = 11
 
-    def donut_params(self, x_center=None, y_center=None, N=None,
-                       sector_angle_start=None, sector_angle_end=None, radius_inner=None, radius_outer=None):
+    def donut_params(self, x_center=None, y_center=None, density=None,
+                     sector_angle_start=None, sector_angle_end=None, radius_inner=None, radius_outer=None):
         """
         Параметры для генерация паттерна "Donut"
         :param x_center: int: центр кольца по X
         :param y_center: int: центр кольца по Y
-        :param N: TODO заполнить что это
+        :param density: int: плотность дефектов
         :param sector_angle_start: float: начало сектора кольца
         :param sector_angle_end: float: начало сектора кольца
         :param radius_inner: int: внутренний радиус кольца
         :param radius_outer: int: наружный радиус кольца
-        :return: все параметры TODO мб переделать под без вывода, чтобы просто он запрашивал у функции
+        :return: все параметры
         """
 
         rand_sector = np.random.randint(0, 4)
@@ -259,29 +259,28 @@ class RingGenerator(BasisGenerator):
         if y_center is None:
             y_center = np.random.randint(0.45 * self.wafer_dims[0], 0.55 * self.wafer_dims[0])
 
-        if N is None:
-            #TODO Переименовать
-            N = np.random.randint(200, 210)
+        if density is None:
+            density = np.random.randint(200, 210)
 
         if radius_inner is None:
             radius_inner = np.random.randint(0.15 * self.wafer_dims[0], 0.3 * self.wafer_dims[0])
         if radius_outer is None:
             radius_outer = np.random.randint(0.33 * self.wafer_dims[0], 0.4 * self.wafer_dims[0])
 
-        return x_center, y_center, sector_angle_start, sector_angle_end, N, radius_inner, radius_outer
+        return x_center, y_center, sector_angle_start, sector_angle_end, density, radius_inner, radius_outer
 
-    def loc_params(self, x_center=None, y_center=None, N=None,
-                       sector_angle_start=None, sector_angle_end=None, radius_inner=None, radius_outer=None):
+    def loc_params(self, x_center=None, y_center=None, density=None,
+                   sector_angle_start=None, sector_angle_end=None, radius_inner=None, radius_outer=None):
         """
         Параметры для генерация паттерна "Loc" TODO поработать на улучшением репрезантативности(после консультации)
         :param x_center: int: центр кольца по X
         :param y_center: int: центр кольца по Y
-        :param N: TODO заполнить что это
+        :param density: int: плотность дефектов
         :param sector_angle_start: float: начало сектора кольца
         :param sector_angle_end: float: начало сектора кольца
         :param radius_inner: int: внутренний радиус кольца
         :param radius_outer: int: наружный радиус кольца
-        :return: все параметры TODO мб переделать под без вывода, чтобы просто он запрашивал у функции
+        :return: все параметры
         """
 
         rand_sector = np.random.randint(0, 4)
@@ -295,31 +294,30 @@ class RingGenerator(BasisGenerator):
         if x_center is None:
             x_center = np.random.randint(0.45 * self.wafer_dims[0], 0.55 * self.wafer_dims[0])
         if y_center is None:
-            y_center = np.random.randint(0.45  * self.wafer_dims[0], 0.55  * self.wafer_dims[0])
+            y_center = np.random.randint(0.45 * self.wafer_dims[0], 0.55 * self.wafer_dims[0])
 
-        if N is None:
-            #TODO Переименовать
-            N = np.random.randint(200, 210)
+        if density is None:
+            density = np.random.randint(200, 210)
 
         if radius_inner is None:
             radius_inner = np.random.randint(0.1 * self.wafer_dims[0], 0.2 * self.wafer_dims[0])
         if radius_outer is None:
             radius_outer = np.random.randint(0.2 * self.wafer_dims[0], 0.25 * self.wafer_dims[0])
 
-        return x_center, y_center, sector_angle_start, sector_angle_end, N, radius_inner, radius_outer
+        return x_center, y_center, sector_angle_start, sector_angle_end, density, radius_inner, radius_outer
 
-    def center_params(self, x_center=None, y_center=None, N=None,
-                       sector_angle_start=None, sector_angle_end=None, radius_inner=None, radius_outer=None):
+    def center_params(self, x_center=None, y_center=None, density=None,
+                      sector_angle_start=None, sector_angle_end=None, radius_inner=None, radius_outer=None):
         """
         Параметры для генерация паттерна "Center"
         :param x_center: int: центр кольца по X
         :param y_center: int: центр кольца по Y
-        :param N: TODO заполнить что это
+        :param density: int: плотность дефектов
         :param sector_angle_start: float: начало сектора кольца
         :param sector_angle_end: float: начало сектора кольца
         :param radius_inner: int: внутренний радиус кольца
         :param radius_outer: int: наружный радиус кольца
-        :return: все параметры TODO мб переделать под без вывода, чтобы просто он запрашивал у функции
+        :return: все параметры
         """
 
         rand_sector = np.random.randint(0, 4)
@@ -335,29 +333,28 @@ class RingGenerator(BasisGenerator):
         if y_center is None:
             y_center = np.random.randint(0.48 * self.wafer_dims[0], 0.50 * self.wafer_dims[0])
 
-        if N is None:
-            #TODO Переименовать
-            N = np.random.randint(200, 210)
+        if density is None:
+            density = np.random.randint(200, 210)
 
         if radius_inner is None:
             radius_inner = np.random.randint(0.0 * self.wafer_dims[0], 0.05 * self.wafer_dims[0])
         if radius_outer is None:
             radius_outer = np.random.randint(0.12 * self.wafer_dims[0], 0.23 * self.wafer_dims[0])
 
-        return x_center, y_center, sector_angle_start, sector_angle_end, N, radius_inner, radius_outer
+        return x_center, y_center, sector_angle_start, sector_angle_end, density, radius_inner, radius_outer
 
-    def edge_ring_params(self, x_center=None, y_center=None, N=None,
-                       sector_angle_start=None, sector_angle_end=None, radius_inner=None, radius_outer=None):
+    def edge_ring_params(self, x_center=None, y_center=None, density=None,
+                         sector_angle_start=None, sector_angle_end=None, radius_inner=None, radius_outer=None):
         """
         Параметры для генерация паттерна "Edge-ring"
         :param x_center: int: центр кольца по X
         :param y_center: int: центр кольца по Y
-        :param N: TODO заполнить что это
+        :param density: int: плотность дефектов
         :param sector_angle_start: float: начало сектора кольца
         :param sector_angle_end: float: начало сектора кольца
         :param radius_inner: int: внутренний радиус кольца
         :param radius_outer: int: наружный радиус кольца
-        :return: все параметры TODO мб переделать под без вывода, чтобы просто он запрашивал у функции
+        :return: все параметры
         """
 
         rand_sector = np.random.randint(0, 4)
@@ -374,33 +371,32 @@ class RingGenerator(BasisGenerator):
         if y_center is None:
             y_center = np.random.randint(center - 2, center)
 
-        if N is None:
-            #TODO Переименовать
-            N = np.random.randint(200, 210)
+        if density is None:
+            density = np.random.randint(200, 210)
 
         if radius_inner is None:
             radius_inner = np.random.randint(center - 4, center - 3)
         if radius_outer is None:
-            radius_outer = np.random.randint(center, center+1)
+            radius_outer = np.random.randint(center, center + 1)
 
-        return x_center, y_center, sector_angle_start, sector_angle_end, N, radius_inner, radius_outer
+        return x_center, y_center, sector_angle_start, sector_angle_end, density, radius_inner, radius_outer
 
-    def edge_loc_params(self, x_center=None, y_center=None, N=None,
-                       sector_angle_start=None, sector_angle_end=None, radius_inner=None, radius_outer=None):
+    def edge_loc_params(self, x_center=None, y_center=None, density=None,
+                        sector_angle_start=None, sector_angle_end=None, radius_inner=None, radius_outer=None):
         """
         Параметры для генерация паттерна "Edge-loc"
         :param x_center: int: центр кольца по X
         :param y_center: int: центр кольца по Y
-        :param N: TODO заполнить что это
+        :param density: int: плотность дефектов
         :param sector_angle_start: float: начало сектора кольца
         :param sector_angle_end: float: начало сектора кольца
         :param radius_inner: int: внутренний радиус кольца
         :param radius_outer: int: наружный радиус кольца
-        :return: все параметры TODO мб переделать под без вывода, чтобы просто он запрашивал у функции
+        :return: все параметры
         """
 
         rand_sector = np.random.randint(0, 4)
-        self.pattern_color = 15
+        self.pattern_color = 16
         center = 0.5 * self.wafer_dims[0]
 
         if sector_angle_start is None:
@@ -413,17 +409,15 @@ class RingGenerator(BasisGenerator):
         if y_center is None:
             y_center = np.random.randint(center - 2, center + 1)
 
-        if N is None:
-            #TODO Переименовать
-            N = np.random.randint(200, 210)
+        if density is None:
+            density = np.random.randint(200, 210)
 
         if radius_inner is None:
             radius_inner = np.random.randint(center - 5, center - 3)
         if radius_outer is None:
-            radius_outer = np.random.randint(center, center+1)
+            radius_outer = np.random.randint(center, center + 1)
 
-        return x_center, y_center, sector_angle_start, sector_angle_end, N, radius_inner, radius_outer
-
+        return x_center, y_center, sector_angle_start, sector_angle_end, density, radius_inner, radius_outer
 
     def __call__(self, wafer=None, mask=None, is_noise=False, lam_poisson=1.5, pattern_type=None):
         """
@@ -441,7 +435,7 @@ class RingGenerator(BasisGenerator):
         if wafer is None:
             wafer = deepcopy(self.template_map)
 
-        pattern_params = { #TODO Внести по умолчанию или ошибку Undefined Pattern
+        pattern_params = {  # TODO Внести по умолчанию или ошибку Undefined Pattern
             'Donut': self.donut_params(),
             'Loc': self.loc_params(),
             'Center': self.center_params(),
@@ -451,27 +445,26 @@ class RingGenerator(BasisGenerator):
 
         ######################## TODO Прокомментировать алгоритм
         # данные в зависимости от паттерна
-        x_center, y_center, sector_angle_start, sector_angle_end, N, radius_inner, radius_outer = \
+        x_center, y_center, sector_angle_start, sector_angle_end, density, radius_inner, radius_outer = \
             pattern_params[pattern_type]
 
         # параметры кольца, объединяем
-        sector_angle = np.linspace(sector_angle_start, sector_angle_end, N)
-        radius_ring = np.linspace(radius_inner, radius_outer, N)
+        sector_angle = np.linspace(sector_angle_start, sector_angle_end, density)
+        radius_ring = np.linspace(radius_inner, radius_outer, density)
 
         # синтез сетки
         radius_ring_, sector_angle_ = np.meshgrid(radius_ring, sector_angle)
-        X = radius_ring_ * (np.cos(sector_angle_)) + x_center
-        Y = radius_ring_ * (np.sin(sector_angle_)) + y_center
-        X_ = np.around(X)
-        Y_ = np.around(Y)
+        x_array = radius_ring_ * (np.cos(sector_angle_)) + x_center
+        y_array = radius_ring_ * (np.sin(sector_angle_)) + y_center
+        x_array_ = np.around(x_array)
+        y_array_ = np.around(y_array)
 
         # индексы для полигона
         points = []
-        print(X_.shape)
-        for x_ in range(X_.shape[0]):
-            for y_ in range(X_.shape[1]):
-                x = X_[x_, y_]
-                y = Y_[x_, y_]
+        for x_ in range(x_array_.shape[0]):
+            for y_ in range(x_array_.shape[1]):
+                x = x_array_[x_, y_]
+                y = y_array_[x_, y_]
                 points.append((x, y))
 
         for idx in points:
@@ -502,7 +495,9 @@ class RingGenerator(BasisGenerator):
 
         return wafer, mask
 
+
 ###########################
+
 
 class NoiseGenerator(BasisGenerator):
     """ Класс для добавления шумов на пластину """
@@ -553,18 +548,18 @@ class NoiseGenerator(BasisGenerator):
         return noise_img, mask
 
 
-def mask_for_visualize(mask):
+def mask_for_visualize(input_mask):
     """
     Форматировать маску с паттернами, записанными по слоям, в маску со всеми паттернами сразу для построения
-    :param mask: np.ndarray (w, h, dims): маска с паттернами по слоям
+    :param input_mask: np.ndarray (w, h, dims): маска с паттернами по слоям
     :return: np.ndarray (w, h): маска со всеми паттернами на одном слое
     """
-    h, w, dims = mask.shape
+    h, w, dims = input_mask.shape
     new_mask = np.zeros((h, w))
 
     for dim in range(dims):  # пройтись по каждому слою
-        color = np.max(mask[:, :, dim])  # найти цвет паттерна в слое
-        new_mask += mask[:, :, dim] / color  # отнормирвать текущий паттерн на свой цвет
+        color = np.max(input_mask[:, :, dim])  # найти цвет паттерна в слое
+        new_mask += input_mask[:, :, dim] / color  # отнормирвать текущий паттерн на свой цвет
     new_mask /= dims  # отнормировать на все паттерны
 
     return new_mask
@@ -584,7 +579,7 @@ if __name__ == '__main__':
         wafer, mask = None, None
         pattern_count = 1  # количество паттернов на пластине
         for i in range(pattern_count):
-            #wafer, mask = scratch_generator(wafer, mask, line_weight=1, is_noise=True, lam_poisson=1.7)
+            # wafer, mask = scratch_generator(wafer, mask, line_weight=1, is_noise=True, lam_poisson=1.7)
             wafer, mask = ring_generator(wafer, mask, pattern_type="Donut", is_noise=True)
             wafer, mask = morph_generator(wafer, mask)
 
