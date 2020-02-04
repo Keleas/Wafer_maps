@@ -439,6 +439,9 @@ class RingGenerator(BasisGenerator):
             'Edge-Ring': self.edge_loc_params(),
             'Edge-Loc': self.edge_loc_params()
         }
+        if pattern_type not in pattern_params:
+            raise KeyError('Неправильный класс паттерна, возможные варианты: '
+                           '("Donut", "Edge-Ring", "Loc", "Edge-Loc", "Center")')
         # TODO: Прокомментировать алгоритм
         # данные в зависимости от паттерна
         x_center, y_center, sector_angle_start, sector_angle_end, density, radius_inner, radius_outer = \
