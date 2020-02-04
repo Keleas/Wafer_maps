@@ -502,26 +502,29 @@ class LocGenerator(BasisGenerator):
     def __init__(self):
         super(LocGenerator, self).__init__()
 
-    def __call__(self, wafer=None, mask=None,  window_location=None, window_size=None, shape=None, lam_poisson=0.3):
+    def __call__(self, wafer=None, mask=None,  window_location=None, window_size=None,
+                 shape=None, lam_poisson=0.3, additional_size=None):
         """
         Регуляризаци дефекта с помощью пуассоновсокго точечного процесса вдоль маски дефекта
         :param wafer: np.ndarray: пластина для нанесения паттерна
         :param window_location: np.ndarray: координата центра окна
-        :param window_size: int: размер окна (диаметр в случае "Circle")
+        :param window_size: int: размер окна (радиус в случае "Circle", полуось в случае "Ellipse")
         :param shape: str: форма окна
         :param lam_poisson: float: величина лямбды в распределении Пуассона
+        :param additional_size: int: дополнительный размер, используемый для построения эллипса
         :return: np.ndarray, np.ndarray: пластина с паттерном и маска паттерна
         """
 
-        shape_dict = {'Circle', 'Square'}  # словарь всех форм окна
+        shape_dict = {'Circle', 'Square', 'Ellipse'}  # словарь всех форм окна
         if shape not in shape_dict:
             raise KeyError('Неправильный типа окна, возможные варианты: '
-                           '"Square", "Circle"')
+                           '"Square", "Circle", "Ellipse"')
 
         if wafer is None:
             wafer = deepcopy(self.template_map)
 
-
+        if additional_size is None:
+            additional_size = window_size
 
         self.pattern_color = 21
         _x, _y = window_location[0], window_location[1]
@@ -546,7 +549,17 @@ class LocGenerator(BasisGenerator):
             loc_mask[loc_window] = wafer[loc_window]  # копирование вафли из данного окна в маску
             loc_mask = np.where(loc_mask == self.wafer_color, self.pattern_color, loc_mask)
 
-        wafer, pattern_mask = self.pattern_regularization(wafer, loc_mask, lam_poisson=0.5)  # пуассонвский шум по маске
+        if shape is "Ellipse":
+            x = np.arange(0, loc_mask.shape[0])
+            y = np.arange(0, loc_mask.shape[1])
+
+            loc_window = (additional_size ** 2) * (x[np.newaxis, :] - _x) ** 2 \
+                         + (window_size ** 2) * (y[:, np.newaxis] - _y) ** 2 < (window_size * additional_size) ** 2
+
+            loc_mask[loc_window] = wafer[loc_window]  # копирование вафли из данного окна в маску
+            loc_mask = np.where(loc_mask == self.wafer_color, self.pattern_color, loc_mask)
+
+        wafer, pattern_mask = self.pattern_regularization(wafer, loc_mask, lam_poisson)  # пуассонвский шум по маске
         wafer[wafer == self.pattern_color] = self.defect_color  # нормировка значений
 
         if mask is None:
@@ -639,7 +652,8 @@ if __name__ == '__main__':
         for i in range(pattern_count):
             # wafer, mask = scratch_generator(wafer, mask, line_weight=1, is_noise=True, lam_poisson=1.7)
             # wafer, mask = ring_generator(wafer, mask, pattern_type="Donut", is_noise=True)
-            wafer, mask = loc_generator(wafer, mask, shape="Circle", window_location=[0, 40], window_size=20)
+            wafer, mask = loc_generator(wafer, mask, shape="Ellipse",
+                                        window_location=[40, 0], window_size=20, lam_poisson=0.5, additional_size=10)
             # wafer, mask = morph_generator(wafer, mask)
 
         # отрисовать результат
