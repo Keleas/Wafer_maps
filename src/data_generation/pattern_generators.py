@@ -537,26 +537,27 @@ class LocGenerator(BasisGenerator):
         loc_mask = np.zeros(wafer.shape)
 
         if shape is None or "Square":
-            low_part = int(np.floor(window_size / 2.0))  # большая часть окна
-            high_part = int(np.ceil(window_size / 2.0))  # меньшая часть окна
-            loc_window = wafer[_x - low_part: _x + high_part, _y - low_part:_y + high_part]
-            # окно для локализованного пуассоновского процесса
-            loc_window = np.where(loc_window == self.wafer_color, self.pattern_color, loc_window)
-            # копируем часть чистую части пластины, заполняем паттерном лока
-            loc_mask[_x - low_part: _x + high_part, _y - low_part:_y + high_part] = loc_window
+            x = np.arange(0, loc_mask.shape[0])
+            y = np.arange(0, loc_mask.shape[1])
+
+            loc_window = np.abs((x[np.newaxis, :] - _x) + (y[:, np.newaxis] - _y))\
+                         + np.abs((x[np.newaxis, :] - _x) - (y[:, np.newaxis] - _y)) \
+                         < 2 * window_size
+
+            loc_mask[loc_window] = wafer[loc_window]  # копирование вафли из данного окна в маску
+            loc_mask = np.where(loc_mask == self.wafer_color, self.pattern_color, loc_mask)
 
         if shape is "Rectangle":
-            low_part_x = int(np.floor(window_size / 2.0))  # большая часть окна по x
-            high_part_x = int(np.ceil(window_size / 2.0))  # меньшая часть окна по x
+            x = np.arange(0, loc_mask.shape[0])
+            y = np.arange(0, loc_mask.shape[1])
 
-            low_part_y = int(np.floor(additional_size / 2.0))  # большая часть окна по y
-            high_part_y = int(np.ceil(additional_size / 2.0))  # меньшая часть окна по y
+            loc_window = np.abs((x[np.newaxis, :] - _x) * additional_size + (y[:, np.newaxis] - _y) * window_size)\
+                         + np.abs((x[np.newaxis, :] - _x) * additional_size - (y[:, np.newaxis] - _y) * window_size) \
+                         < 2 * window_size * additional_size
 
-            loc_window = wafer[_x - low_part_x: _x + high_part_x, _y - low_part_y:_y + high_part_y]
-            # окно для локализованного пуассоновского процесса
-            loc_window = np.where(loc_window == self.wafer_color, self.pattern_color, loc_window)
-            # копируем часть чистую части пластины, заполняем паттерном лока
-            loc_mask[_x - low_part_x: _x + high_part_x, _y - low_part_y:_y + high_part_y] = loc_window
+            loc_mask[loc_window] = wafer[loc_window]  # копирование вафли из данного окна в маску
+            loc_mask = np.where(loc_mask == self.wafer_color, self.pattern_color, loc_mask)
+
 
         if shape is "Circle":
             x = np.arange(0, loc_mask.shape[0])
@@ -670,8 +671,8 @@ if __name__ == '__main__':
         for i in range(pattern_count):
             # wafer, mask = scratch_generator(wafer, mask, line_weight=1, is_noise=True, lam_poisson=1.7)
             # wafer, mask = ring_generator(wafer, mask, pattern_type="Donut", is_noise=True)
-            wafer, mask = loc_generator(wafer, mask, shape="Rectangle", window_size=20, window_location=[0, 46],
-                                        lam_poisson=0.5, additional_size=10)
+            wafer, mask = loc_generator(wafer, mask, shape="Rectangle", window_size=10, window_location=[46, 46],
+                                        lam_poisson=0.5, additional_size=40)
             # wafer, mask = morph_generator(wafer, mask)
 
         # отрисовать результат
