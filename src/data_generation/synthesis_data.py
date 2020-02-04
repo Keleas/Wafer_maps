@@ -53,6 +53,8 @@ def synthesis_scratch(wafer_count):
     # преобразовать list в pandas.DataFrame
     database = pd.DataFrame(synthesis_base, columns=['wafer', 'mask'])
     # сохарнить базу данных в формат csv
+    if not os.path.isdir('../../input/synthesis/'):
+        os.mkdir('../../input/synthesis/')
     database.to_csv('../../input/synthesis/test_database.csv')
 
     return database
