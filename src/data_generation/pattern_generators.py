@@ -1,10 +1,7 @@
-import os
 import cv2
-import time
 import pandas as pd
 import numpy as np
 import random
-from tqdm import tqdm
 from copy import deepcopy
 import matplotlib.pyplot as plt
 
@@ -255,24 +252,24 @@ class RingGenerator(BasisGenerator):
             sector_angle_end = np.random.uniform(180 + 90 * rand_sector, 360 * (rand_sector + 1)) * np.pi / 180
 
         if x_center is None:
-            x_center = np.random.randint(0.45 * self.wafer_dims[0], 0.55 * self.wafer_dims[0])
+            x_center = np.random.randint(int(0.45 * self.wafer_dims[0]), int(0.55 * self.wafer_dims[0]))
         if y_center is None:
-            y_center = np.random.randint(0.45 * self.wafer_dims[0], 0.55 * self.wafer_dims[0])
+            y_center = np.random.randint(int(0.45 * self.wafer_dims[0]), int(0.55 * self.wafer_dims[0]))
 
         if density is None:
             density = np.random.randint(200, 210)
 
         if radius_inner is None:
-            radius_inner = np.random.randint(0.15 * self.wafer_dims[0], 0.3 * self.wafer_dims[0])
+            radius_inner = np.random.randint(int(0.15 * self.wafer_dims[0]), int(0.3 * self.wafer_dims[0]))
         if radius_outer is None:
-            radius_outer = np.random.randint(0.33 * self.wafer_dims[0], 0.4 * self.wafer_dims[0])
+            radius_outer = np.random.randint(int(0.33 * self.wafer_dims[0]), int(0.4 * self.wafer_dims[0]))
 
         return x_center, y_center, sector_angle_start, sector_angle_end, density, radius_inner, radius_outer
 
     def loc_params(self, x_center=None, y_center=None, density=None,
                    sector_angle_start=None, sector_angle_end=None, radius_inner=None, radius_outer=None):
         """
-        Параметры для генерация паттерна "Loc" TODO поработать на улучшением репрезантативности(после консультации)
+        Параметры для генерация паттерна "Loc" TODO: поработать на улучшением репрезантативности(после консультации)
         :param x_center: int: центр кольца по X
         :param y_center: int: центр кольца по Y
         :param density: int: плотность дефектов
@@ -292,17 +289,17 @@ class RingGenerator(BasisGenerator):
             sector_angle_end = np.random.uniform(65 + 90 * rand_sector, 95 * (rand_sector + 1)) * np.pi / 180
 
         if x_center is None:
-            x_center = np.random.randint(0.45 * self.wafer_dims[0], 0.55 * self.wafer_dims[0])
+            x_center = np.random.randint(int(0.45 * self.wafer_dims[0]), int(0.55 * self.wafer_dims[0]))
         if y_center is None:
-            y_center = np.random.randint(0.45 * self.wafer_dims[0], 0.55 * self.wafer_dims[0])
+            y_center = np.random.randint(int(0.45 * self.wafer_dims[0]), int(0.55 * self.wafer_dims[0]))
 
         if density is None:
             density = np.random.randint(200, 210)
 
         if radius_inner is None:
-            radius_inner = np.random.randint(0.1 * self.wafer_dims[0], 0.2 * self.wafer_dims[0])
+            radius_inner = np.random.randint(int(0.1 * self.wafer_dims[0]), int(0.2 * self.wafer_dims[0]))
         if radius_outer is None:
-            radius_outer = np.random.randint(0.2 * self.wafer_dims[0], 0.25 * self.wafer_dims[0])
+            radius_outer = np.random.randint(int(0.2 * self.wafer_dims[0]), int(0.25 * self.wafer_dims[0]))
 
         return x_center, y_center, sector_angle_start, sector_angle_end, density, radius_inner, radius_outer
 
@@ -329,17 +326,17 @@ class RingGenerator(BasisGenerator):
             sector_angle_end = np.random.uniform(45 + 90 * rand_sector, 95 * (rand_sector + 1)) * np.pi / 180
 
         if x_center is None:
-            x_center = np.random.randint(0.48 * self.wafer_dims[0], 0.50 * self.wafer_dims[0])
+            x_center = np.random.randint(int(0.48 * self.wafer_dims[0]), int(0.50 * self.wafer_dims[0]))
         if y_center is None:
-            y_center = np.random.randint(0.48 * self.wafer_dims[0], 0.50 * self.wafer_dims[0])
+            y_center = np.random.randint(int(0.48 * self.wafer_dims[0]), int(0.50 * self.wafer_dims[0]))
 
         if density is None:
             density = np.random.randint(200, 210)
 
         if radius_inner is None:
-            radius_inner = np.random.randint(0.0 * self.wafer_dims[0], 0.05 * self.wafer_dims[0])
+            radius_inner = np.random.randint(int(0.0 * self.wafer_dims[0]), int(0.05 * self.wafer_dims[0]))
         if radius_outer is None:
-            radius_outer = np.random.randint(0.12 * self.wafer_dims[0], 0.23 * self.wafer_dims[0])
+            radius_outer = np.random.randint(int(0.12 * self.wafer_dims[0]), int(0.23 * self.wafer_dims[0]))
 
         return x_center, y_center, sector_angle_start, sector_angle_end, density, radius_inner, radius_outer
 
@@ -359,7 +356,7 @@ class RingGenerator(BasisGenerator):
 
         rand_sector = np.random.randint(0, 4)
         self.pattern_color = 15
-        center = 0.5 * self.wafer_dims[0]
+        center = int(0.5 * self.wafer_dims[0])
 
         if sector_angle_start is None:
             sector_angle_start = np.random.uniform(90 * rand_sector, 30 + 90 * rand_sector) * np.pi / 180
@@ -397,7 +394,7 @@ class RingGenerator(BasisGenerator):
 
         rand_sector = np.random.randint(0, 4)
         self.pattern_color = 16
-        center = 0.5 * self.wafer_dims[0]
+        center = int(0.5 * self.wafer_dims[0])
 
         if sector_angle_start is None:
             sector_angle_start = np.random.uniform(15 + 90 * rand_sector, 25 + 90 * rand_sector) * np.pi / 180
@@ -435,15 +432,14 @@ class RingGenerator(BasisGenerator):
         if wafer is None:
             wafer = deepcopy(self.template_map)
 
-        pattern_params = {  # TODO Внести по умолчанию или ошибку Undefined Pattern
+        pattern_params = {  # TODO: Внести по умолчанию или ошибку Undefined Pattern
             'Donut': self.donut_params(),
             'Loc': self.loc_params(),
             'Center': self.center_params(),
             'Edge-Ring': self.edge_loc_params(),
             'Edge-Loc': self.edge_loc_params()
         }
-
-        ######################## TODO Прокомментировать алгоритм
+        # TODO: Прокомментировать алгоритм
         # данные в зависимости от паттерна
         x_center, y_center, sector_angle_start, sector_angle_end, density, radius_inner, radius_outer = \
             pattern_params[pattern_type]
@@ -529,7 +525,6 @@ class NoiseGenerator(BasisGenerator):
         # TODO: заложить дополнительный функционал:
         #       1) случайны локальный процесс на всей пластине
 
-        # внесем шум
         noise_img = deepcopy(wafer)
         # подготовить маску с местоположением шума на карте
         noise_mask = np.random.randint(0, 2, size=noise_img.shape).astype(np.bool)
@@ -579,7 +574,7 @@ if __name__ == '__main__':
         wafer, mask = None, None
         pattern_count = 1  # количество паттернов на пластине
         for i in range(pattern_count):
-            # wafer, mask = scratch_generator(wafer, mask, line_weight=1, is_noise=True, lam_poisson=1.7)
+            wafer, mask = scratch_generator(wafer, mask, line_weight=1, is_noise=True, lam_poisson=1.7)
             wafer, mask = ring_generator(wafer, mask, pattern_type="Donut", is_noise=True)
             wafer, mask = morph_generator(wafer, mask)
 
