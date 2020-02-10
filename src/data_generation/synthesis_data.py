@@ -32,47 +32,46 @@ def synthesis_scratch(wafer_count):
     """ Конфигурация """
     for _ in tqdm(range(wafer_count), ascii=True, total=total_wafer_count,
                   desc='line_weight=1, lam=1.7'):
-        wafer, mask = generator(line_weight=1, is_noise=True, lam_poisson=1.7)
-        wafer, mask = noise(wafer, mask)
-        synthesis_base.append([wafer, mask])
+        wafer_map, pattern_mask = generator(line_weight=1, is_noise=True, lam_poisson=1.7)
+        wafer_map, pattern_mask = noise(wafer_map, pattern_mask)
+        synthesis_base.append([wafer_map, pattern_mask])
 
     """ Конфигурация """
     for _ in tqdm(range(wafer_count), ascii=True, total=total_wafer_count/2,
                   desc='line_weight=2, lam=2.1'):
-        wafer, mask = generator(line_weight=2, is_noise=True, lam_poisson=2.1)
-        wafer, mask = noise(wafer, mask)
-        synthesis_base.append([wafer, mask])
+        wafer_map, pattern_mask = generator(line_weight=2, is_noise=True, lam_poisson=2.1)
+        wafer_map, pattern_mask = noise(wafer_map, pattern_mask)
+        synthesis_base.append([wafer_map, pattern_mask])
 
     """ Конфигурация """
     for _ in tqdm(range(wafer_count), ascii=True, total=total_wafer_count/3,
                   desc='line_weight=3, lam=0.7'):
-        wafer, mask = generator(line_weight=3, is_noise=True, lam_poisson=0.7)
-        wafer, mask = noise(wafer, mask)
-        synthesis_base.append([wafer, mask])
+        wafer_map, pattern_mask = generator(line_weight=3, is_noise=True, lam_poisson=0.7)
+        wafer_map, pattern_mask = noise(wafer_map, pattern_mask)
+        synthesis_base.append([wafer_map, pattern_mask])
 
     # преобразовать list в pandas.DataFrame
-    database = pd.DataFrame(synthesis_base, columns=['wafer', 'mask'])
-    # сохарнить базу данных в формат csv
+    database = pd.DataFrame(synthesis_base, columns=['wafer_map', 'pattern_mask'])
+    # сохранить базу данных в формат csv
     if not os.path.isdir('../../input/synthesis/'):
         os.mkdir('../../input/synthesis/')
-    database.to_csv('../../input/synthesis/test_database.csv')
+    database.to_pickle('../../input/synthesis/test_database.pkl', compression=None)
 
     return database
 
 
 if __name__ == '__main__':
     """ Визуальная проверка сгенерированных данных """
-    scratch_database = synthesis_scratch(wafer_count=100)
+    scratch_database = synthesis_scratch(wafer_count=700)
 
-    number_example = 50  # количество случайных примеров
+    number_example = 10  # количество случайных примеров
     for i in range(number_example):
         sample = scratch_database.sample(n=1)  # взять случайный элемент из базы
         # выделить вафлю и маску из sample
-        wafer, mask = sample['wafer'].values[0], sample['mask'].values[0]
-
+        wafer_map, pattern_mask = sample['wafer_map'].values[0], sample['pattern_mask'].values[0]
         # отрисовать примеры
         fig, maxs = plt.subplots(1, 2, figsize=(8, 8))
         maxs = maxs.ravel(order='C')
-        maxs[0].imshow(wafer, cmap='inferno')
-        maxs[1].imshow(mask_for_visualize(mask), cmap='inferno')
+        maxs[0].imshow(wafer_map, cmap='inferno')
+        maxs[1].imshow(mask_for_visualize(pattern_mask), cmap='inferno')
         plt.show()
