@@ -16,6 +16,7 @@ WAFER_COLOR = 1  # цвет пластины без дефектов
 BACK_COLOR = 0  # цвет пустого поля
 
 
+# TODO: проверить верно ли стоит порядок у объединения масок
 def load_template_map(image_dim):
     template_path = '../../input/template_wafer_map.pkl'
     template = pd.read_pickle(template_path)
@@ -520,13 +521,17 @@ class CurvedScratchGenerator(BasisGenerator):
 
         # TODO: переписать дефолтные параметры (пример проблемы: кольцо может и находиться на пластине, а сектор нет)
         if scratch_ring_radius is None:
+            # минимальный радиус — четверть пластины, максимальный — половины
             scratch_ring_radius = np.random.randint(int(self.wafer_dims[0] / 4), int(self.wafer_dims[0] / 2))
 
         if scratch_ring_center is None:
-            scratch_ring_center = (np.random.randint(-scratch_ring_radius / 2, self.wafer_dims[0] + scratch_ring_radius/2),
-                                   np.random.randint(-scratch_ring_radius / 2, self.wafer_dims[0] + scratch_ring_radius/2))
+            scratch_ring_center = (np.random.randint(-scratch_ring_radius / 2,
+                                                     self.wafer_dims[0] + scratch_ring_radius/2),
+                                   np.random.randint(-scratch_ring_radius / 2,
+                                                     self.wafer_dims[0] + scratch_ring_radius/2))
 
         if scratch_ring_angle is None:
+            # минимальный угол — 10 градусов
             starting_angle = np.random.randint(0, 180)
             scratch_ring_angle = (starting_angle, np.random.randint(starting_angle + 10, starting_angle + 180))
 
@@ -547,10 +552,10 @@ class CurvedScratchGenerator(BasisGenerator):
         _x2 = _x + scratch_ring_radius * np.cos(ending_angle)  # точка x второй прямой для построения дуги
         _y2 = _x + scratch_ring_radius * np.sin(ending_angle)  # точка y второй прямой для построения дуги
 
-        scratch_mask = np.zeros(wafer.shape)
+        scratch_mask = np.zeros(wafer.shape)  # шаблон для маски
 
-        x = np.arange(0, scratch_mask.shape[0])
-        y = np.arange(0, scratch_mask.shape[1])
+        x = np.arange(0, scratch_mask.shape[0])  # массив х координат маски
+        y = np.arange(0, scratch_mask.shape[1])  # массив y координат маски
 
         # построение маски при помощи пересечения областей/внутри снаружи круга для построения кольца
         scratch_coord_inner = (x[np.newaxis, :] - _x) ** 2 + (y[:, np.newaxis] - _y) ** 2 \
