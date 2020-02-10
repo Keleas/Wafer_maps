@@ -149,7 +149,7 @@ class ScratchGenerator(BasisGenerator):
 
         if line_weight is None:
             # если толщина царапины не задана — применить толщину по умолчанию в 1 пиксель
-            line_weight = 5.0
+            line_weight = 1.0
 
         # длина всех составных частей прямой без учета линий соединения частей
         part_length = length - int(np.sum(np.linalg.norm([all_xc[1:], all_yc[1:]])))
@@ -213,7 +213,7 @@ class ScratchGenerator(BasisGenerator):
 
         # добавить в маске слой для нового цвета
         if mask is None:
-            mask = np.expand_dims(pattern_mask, axis=2)
+            mask = np.expand_dims(pattern_mask, axis=0)
         else:
             mask = np.dstack((mask, pattern_mask))
 
@@ -486,7 +486,7 @@ class RingGenerator(BasisGenerator):
 
         # добавить в маске слой для нового цвета
         if mask is None:
-            mask = np.expand_dims(pattern_mask, axis=2)
+            mask = np.expand_dims(pattern_mask, axis=0)
         else:
             mask = np.dstack((mask, pattern_mask))
 
@@ -495,19 +495,113 @@ class RingGenerator(BasisGenerator):
         return wafer, mask
 
 
-###########################
+class CurvedScratchGenerator(BasisGenerator):
+    """ Класс для добавления паттерна "Curved Scratch" на пластину"""
+
+    def __init__(self):
+        super(CurvedScratchGenerator, self).__init__()
+
+    def __call__(self, wafer=None, mask=None, scratch_ring_center=None, scratch_ring_radius=None,
+                 scratch_ring_angle=None, line_weight=None, is_noise=False, lam_poisson=0.5):
+        """
+        Сгенерировать паттерн "Curved Scratch" на заданной пластине.
+        :param wafer: np.ndarray: пластина для нанесения паттерна
+        :param mask: np.ndarray: маска дефекта
+        :param scratch_ring_center: int, int: центр кольца, используемый при построении царапины
+        :param scratch_ring_radius: int: радиус кольца, используемый при построении царапины
+        :param scratch_ring_angle: int, int : углы дуги царапины
+        :param line_weight: int: примерная толщина паттерна "Curved Scratch"
+        :param is_noise: bool: если True добавить регуляризацию на паттерн, False - ничего не делать
+        :param lam_poisson: float: величина лямбды(частота событий) в распределении Пуассона
+        :return: np.ndarray, np.ndarray: пластина с паттерном и маска паттерна
+        """
+        if wafer is None:
+            wafer = deepcopy(self.template_map)
+
+        # TODO: переписать дефолтные параметры (пример проблемы: кольцо может и находиться на пластине, а сектор нет)
+        if scratch_ring_radius is None:
+            scratch_ring_radius = np.random.randint(int(self.wafer_dims[0] / 4), int(self.wafer_dims[0] / 2))
+
+        if scratch_ring_center is None:
+            scratch_ring_center = (np.random.randint(-scratch_ring_radius / 2, self.wafer_dims[0] + scratch_ring_radius/2),
+                                   np.random.randint(-scratch_ring_radius / 2, self.wafer_dims[0] + scratch_ring_radius/2))
+
+        if scratch_ring_angle is None:
+            starting_angle = np.random.randint(0, 180)
+            scratch_ring_angle = (starting_angle, np.random.randint(starting_angle + 10, starting_angle + 180))
+
+        if line_weight is None:
+            # если толщина царапины не задана — применить толщину по умолчанию в 1 пиксель
+            line_weight = 1.0
+
+        self.pattern_color = 22
+
+        starting_angle = np.radians(-scratch_ring_angle[0])  # начало угла сектора в радианах
+        ending_angle = np.radians(-scratch_ring_angle[1])  # конец угла сектора в радианах
+
+        _x, _y = scratch_ring_center[0], scratch_ring_center[1]  # разделяем координаты центра на x и y координату
+
+        _x1 = _x + scratch_ring_radius * np.cos(starting_angle)  # точка x первой прямой для построения дуги
+        _y1 = _x + scratch_ring_radius * np.sin(starting_angle)  # точка y первой прямой для построения дуги
+
+        _x2 = _x + scratch_ring_radius * np.cos(ending_angle)  # точка x второй прямой для построения дуги
+        _y2 = _x + scratch_ring_radius * np.sin(ending_angle)  # точка y второй прямой для построения дуги
+
+        scratch_mask = np.zeros(wafer.shape)
+
+        x = np.arange(0, scratch_mask.shape[0])
+        y = np.arange(0, scratch_mask.shape[1])
+
+        # построение маски при помощи пересечения областей/внутри снаружи круга для построения кольца
+        scratch_coord_inner = (x[np.newaxis, :] - _x) ** 2 + (y[:, np.newaxis] - _y) ** 2 \
+                              <= scratch_ring_radius ** 2 + scratch_ring_radius * line_weight
+
+        scratch_coord_outer = (x[np.newaxis, :] - _x) ** 2 + (y[:, np.newaxis] - _y) ** 2 \
+                              >= scratch_ring_radius ** 2 - scratch_ring_radius * line_weight
+
+        # построение маски при помощи параметрических уравнений вспомогательных прямых для ограничения дуги
+        scratch_coord_sector_1 = \
+            x[np.newaxis, :] * (_y - _y1) - y[:, np.newaxis] * (_x - _x1) <= -(_x - _x1) * _x + (_y - _y1) * _y
+        scratch_coord_sector_2 = \
+            x[np.newaxis, :] * (_y - _y2) - y[:, np.newaxis] * (_x - _x2) >= -(_x - _x2) * _x + (_y - _y2) * _y
+
+        # объединение масок
+        scratch_coord_ring = np.logical_and(scratch_coord_inner, scratch_coord_outer)
+        scratch_coord_sector = np.logical_and(scratch_coord_sector_1, scratch_coord_sector_2)
+
+        if (scratch_ring_angle[1] - scratch_ring_angle[0]) <= 180:
+            scratch_coords = np.logical_and(scratch_coord_ring, scratch_coord_sector)
+        else:
+            scratch_coords = np.logical_and(scratch_coord_ring, ~scratch_coord_sector)
+
+        scratch_mask[scratch_coords] = wafer[scratch_coords]  # копирование вафли из данного окна в маску
+        # построение маски паттерна только там, где присутствует сама пластина
+        scratch_mask = np.where(scratch_mask == self.wafer_color, self.pattern_color, scratch_mask)
+
+        # регуляризация дефекта с помощью шума
+        if is_noise:
+            wafer, scratch_mask = self.pattern_regularization(wafer, scratch_mask, lam_poisson)
+
+        if mask is None:
+            mask = np.expand_dims(scratch_mask, axis=0)
+        else:
+            mask = np.dstack((mask, scratch_mask))
+
+        return wafer, mask
+
+
 class LocGenerator(BasisGenerator):
     """ Класс для добавления локализованного пуассоновского шума на пластину"""
 
     def __init__(self):
         super(LocGenerator, self).__init__()
 
-    def __call__(self, wafer=None, mask=None,  window_location=None, window_size=None,
+    def __call__(self, wafer=None, mask=None, window_location=None, window_size=None,
                  shape=None, lam_poisson=0.3, additional_size=None):
         """
         Регуляризаци дефекта с помощью пуассоновсокго точечного процесса вдоль маски дефекта
         :param wafer: np.ndarray: пластина для нанесения паттерна
-        :param window_location: np.ndarray: координата центра окна
+        :param window_location: int, int: координата центра окна
         :param window_size: int: размер окна (радиус в случае "Circle", полуось в случае "Ellipse")
         :param shape: str: форма окна
         :param lam_poisson: float: величина лямбды в распределении Пуассона
@@ -517,7 +611,7 @@ class LocGenerator(BasisGenerator):
 
         shape_dict = {'Circle', 'Square', 'Ellipse', 'Rectangle'}  # словарь всех форм окна
         if shape not in shape_dict:
-            raise KeyError('Неправильный типа окна, возможные варианты: '
+            raise KeyError('Неправильный тип окна. Возможные варианты: '
                            '"Square", "Circle", "Ellipse", "Rectangle"')
         if wafer is None:
             wafer = deepcopy(self.template_map)
@@ -529,7 +623,7 @@ class LocGenerator(BasisGenerator):
             window_size = np.random.randint(5, int(self.wafer_dims[0] / 4))
 
         if additional_size is None:
-            additional_size = np.random.randint(5, window_size)
+            additional_size = np.random.randint(5, window_size + 1)
 
         self.pattern_color = 21
         _x, _y = window_location[0], window_location[1]
@@ -540,9 +634,8 @@ class LocGenerator(BasisGenerator):
             x = np.arange(0, loc_mask.shape[0])
             y = np.arange(0, loc_mask.shape[1])
 
-            loc_window = np.abs((x[np.newaxis, :] - _x) + (y[:, np.newaxis] - _y))\
-                         + np.abs((x[np.newaxis, :] - _x) - (y[:, np.newaxis] - _y)) \
-                         < 2 * window_size
+            loc_window = np.abs((x[np.newaxis, :] - _x) + (y[:, np.newaxis] - _y)) \
+                         + np.abs((x[np.newaxis, :] - _x) - (y[:, np.newaxis] - _y)) < 2 * window_size
 
             loc_mask[loc_window] = wafer[loc_window]  # копирование вафли из данного окна в маску
             loc_mask = np.where(loc_mask == self.wafer_color, self.pattern_color, loc_mask)
@@ -551,13 +644,12 @@ class LocGenerator(BasisGenerator):
             x = np.arange(0, loc_mask.shape[0])
             y = np.arange(0, loc_mask.shape[1])
 
-            loc_window = np.abs((x[np.newaxis, :] - _x) * additional_size + (y[:, np.newaxis] - _y) * window_size)\
+            loc_window = np.abs((x[np.newaxis, :] - _x) * additional_size + (y[:, np.newaxis] - _y) * window_size) \
                          + np.abs((x[np.newaxis, :] - _x) * additional_size - (y[:, np.newaxis] - _y) * window_size) \
                          < 2 * window_size * additional_size
 
             loc_mask[loc_window] = wafer[loc_window]  # копирование вафли из данного окна в маску
             loc_mask = np.where(loc_mask == self.wafer_color, self.pattern_color, loc_mask)
-
 
         if shape is "Circle":
             x = np.arange(0, loc_mask.shape[0])
@@ -578,11 +670,11 @@ class LocGenerator(BasisGenerator):
             loc_mask[loc_window] = wafer[loc_window]  # копирование вафли из данного окна в маску
             loc_mask = np.where(loc_mask == self.wafer_color, self.pattern_color, loc_mask)
 
-        wafer, pattern_mask = self.pattern_regularization(wafer, loc_mask, lam_poisson)  # пуассонвский шум по маске
+        wafer, pattern_mask = self.pattern_regularization(wafer, loc_mask, lam_poisson)  # пуассоновский шум по маске
         wafer[wafer == self.pattern_color] = self.defect_color  # нормировка значений
 
         if mask is None:
-            mask = np.expand_dims(pattern_mask, axis=2)
+            mask = np.expand_dims(pattern_mask, axis=0)
         else:
             mask = np.dstack((mask, pattern_mask))
 
@@ -631,8 +723,8 @@ class NoiseGenerator(BasisGenerator):
         noise_img[noise_mask] = r[noise_mask]  # применить шум
 
         # вернуть дефект с каждого слоя маски
-        for layer in range(mask.shape[2]):
-            noise_img[mask[:, :, layer] > self.back_color] = self.defect_color
+        for layer in range(mask.shape[0]):
+            noise_img[mask[layer, :, :] > self.back_color] = self.defect_color
 
         return noise_img, mask
 
@@ -643,12 +735,12 @@ def mask_for_visualize(input_mask):
     :param input_mask: np.ndarray (w, h, dims): маска с паттернами по слоям
     :return: np.ndarray (w, h): маска со всеми паттернами на одном слое
     """
-    h, w, dims = input_mask.shape
+    dims, h, w = input_mask.shape
     new_mask = np.zeros((h, w))
 
     for dim in range(dims):  # пройтись по каждому слою
-        color = np.max(input_mask[:, :, dim])  # найти цвет паттерна в слое
-        new_mask += input_mask[:, :, dim] / color  # отнормирвать текущий паттерн на свой цвет
+        color = np.max(input_mask[dim, :, :])  # найти цвет паттерна в слое
+        new_mask += input_mask[dim, :, :] / color  # отнормирвать текущий паттерн на свой цвет
     new_mask /= dims  # отнормировать на все паттерны
 
     return new_mask
@@ -660,20 +752,22 @@ if __name__ == '__main__':
     morph_generator = NoiseGenerator()
     ring_generator = RingGenerator()
     loc_generator = LocGenerator()
+    curved_scratch = CurvedScratchGenerator()
 
-    example_count = 1  # примеров для тестирования
+    example_count = 5  # примеров для тестирования
     for i in range(example_count):
         fig, maxs = plt.subplots(1, 2, figsize=(10, 7))
 
         # сгенерировать несколько паттернов на одной пластине
         wafer, mask = None, None
         pattern_count = 1  # количество паттернов на пластине
-        for i in range(pattern_count):
+        for j in range(pattern_count):
             # wafer, mask = scratch_generator(wafer, mask, line_weight=1, is_noise=True, lam_poisson=1.7)
+            wafer, mask = curved_scratch(wafer, mask, is_noise=True, lam_poisson=1.0)
             # wafer, mask = ring_generator(wafer, mask, pattern_type="Donut", is_noise=True)
-            wafer, mask = loc_generator(wafer, mask, shape="Rectangle", window_size=10, window_location=[46, 46],
-                                        lam_poisson=0.5, additional_size=40)
-            # wafer, mask = morph_generator(wafer, mask)
+            # wafer, mask = loc_generator(wafer, mask, shape="Rectangle",
+            #                            lam_poisson=0.5)
+            wafer, mask = morph_generator(wafer, mask)
 
         # отрисовать результат
         maxs[0].imshow(wafer, cmap='inferno')
