@@ -1,27 +1,27 @@
 import os
 import argparse
-import itertools
+# import itertools
 import numpy as np
 from tqdm import tqdm
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import pandas as pd
 from copy import deepcopy
 import gc
 
 import torch
 from torch import nn
-import torch.nn.functional as F
+# import torch.nn.functional as F
 from torch.utils.data import Dataset
-from torch.utils.data import DataLoader
-from torch.utils.data.sampler import RandomSampler
+# from torch.utils.data import DataLoader
+# from torch.utils.data.sampler import RandomSampler
 from torch.utils.data.sampler import SubsetRandomSampler
 import segmentation_models_pytorch as smp
-from sklearn.metrics import confusion_matrix
-import torchvision.models as torch_models
+# from sklearn.metrics import confusion_matrix
+# import torchvision.models as torch_models
 
 from src.utils.logger import Logger
 # from src.data_generation.create_data import TrainingDatabaseCreator, WaferDataset
-from src.utils.torchutils import EarlyStopping
+# from src.utils.torchutils import EarlyStopping
 from src.utils.losses import lovasz_softmax, dice_channel_torch
 
 
@@ -37,6 +37,7 @@ class WaferDataset(Dataset):
         wafer_map = deepcopy(self.wafer_list[idx])
         pattern_mask = deepcopy(self.mask_list[idx])
 
+        # расширение размерности и дублирование нового канала для совпадения с размерностью входных данных ResNet34
         wafer_map, pattern_mask = torch.from_numpy(np.repeat(np.expand_dims(wafer_map, axis=0), 3, axis=0)).float(), \
                                   torch.from_numpy(pattern_mask).float()
 
@@ -45,7 +46,7 @@ class WaferDataset(Dataset):
 
 class TrainModel(object):
     def __init__(self):
-        self.logger = Logger('logs/')
+        self.logger = Logger('src/main/logs/')
 
         # model
         self.model = None
@@ -74,10 +75,10 @@ class TrainModel(object):
             wafer_map, pattern_mask = wafer_map.to(device), pattern_mask.to(device)
             with torch.set_grad_enabled(False):
                 out = self.model(wafer_map)
-                #loss = nn.BCEWithLogitsLoss()(out, pattern_mask)
-                loss = nn.BCEWithLogitsLoss()(F.sigmoid(out), pattern_mask)
+                loss = nn.BCEWithLogitsLoss()(torch.sigmoid(out), pattern_mask)
+                # TODO: все ещё не уверен верно ли это, BCEWithLogitsLoss уже несёт в себе функцию активации сигмоиду
 
-            predicts.append(F.sigmoid(out).detach().cpu().numpy())
+            predicts.append(torch.sigmoid(out).detach().cpu().numpy())
             truths.append(pattern_mask.detach().cpu().numpy())
             cum_loss += loss.item() * wafer_map.size(0)
             gc.collect()
@@ -98,7 +99,7 @@ class TrainModel(object):
 
             with torch.set_grad_enabled(True):
                 out = self.model(wafer_map)
-                loss = nn.BCEWithLogitsLoss()(F.sigmoid(out), pattern_mask)
+                loss = nn.BCEWithLogitsLoss()(torch.sigmoid(out), pattern_mask)
 
                 loss.backward()
                 self.optimizer.step()
@@ -150,8 +151,11 @@ class TrainModel(object):
             # scheduler checkpoint
             if mean_dice > best_acc:
                 best_acc = mean_dice
-                best_param = self.model.state_dict()
-                torch.save(best_param, args.save_weight + args.weight_name + str(num_snapshot) + '.pth')
+                states = {
+                    'model_state_dict': self.model.state_dict(),
+                    'optimizer': self.optimizer.state_dict(),
+                    }
+                torch.save(states, args.save_weight + args.weight_name + str(num_snapshot) + '.pth')
 
         return True
 
@@ -186,7 +190,7 @@ class TrainModel(object):
         '''
         Загружает данные в обучающую и валидационную выборки
         '''
-        path_to_file = "/Users/user/K-132-8/Wafer_maps/input/synthesis/test_database.pkl"
+        path_to_file = "input/synthesis/test_database.pkl"
         # database_pd = self.read_dataframe_in_torch(path_to_file)  # TODO: починить, если понадобится загрузка реальных
         database_pd = pd.read_pickle(path_to_file)
         data_set = WaferDataset(list(database_pd.wafer_map.values), mask_list=list(database_pd.pattern_mask.values))
@@ -216,13 +220,12 @@ class TrainModel(object):
         # Get Model
         self.model = smp.Unet(args.model, classes=1)
         self.model.to(device)
-        print(self.model)
 
         # Get Data
-        self.load_data()  # train/val/test loaders
+        self.load_data()  # train/val loaders
 
         # Setup optimizer
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=args.max_lr)
+        self.optimizer = torch.optim.Adam(self.model.parameters())
         self.lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, patience=args.patience)
         self.training()
         return True
