@@ -3,14 +3,14 @@ import argparse
 # import itertools
 import numpy as np
 from tqdm import tqdm
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 import pandas as pd
 from copy import deepcopy
 import gc
+import time
 
 import torch
 from torch import nn
-# import torch.nn.functional as F
 from torch.utils.data import Dataset
 # from torch.utils.data import DataLoader
 # from torch.utils.data.sampler import RandomSampler
@@ -46,7 +46,9 @@ class WaferDataset(Dataset):
 
 class TrainModel(object):
     def __init__(self):
-        self.logger = Logger('src/main/logs/')
+        self.start_time = time.strftime("%d.%m.%Y_%H.%M", time.localtime())
+        # os.mkdir("src/main/logs/" + self.start_time)
+        self.logger = Logger(os.path.join("src/main/logs/", self.start_time))
 
         # model
         self.model = None
@@ -62,10 +64,6 @@ class TrainModel(object):
         self.test_data = None
 
     def val_step(self):
-        """
-
-        :return:
-        """
         cum_loss = 0
         predicts = []
         truths = []
@@ -74,18 +72,19 @@ class TrainModel(object):
         for wafer_map, pattern_mask in tqdm(self.val_loader, total=len(self.val_loader), ascii=True, desc='validation'):
             wafer_map, pattern_mask = wafer_map.to(device), pattern_mask.to(device)
             with torch.set_grad_enabled(False):
-                out = self.model(wafer_map)
-                loss = nn.BCEWithLogitsLoss()(torch.sigmoid(out), pattern_mask)
+                outputs = self.model(wafer_map)
+                loss = nn.BCEWithLogitsLoss()(torch.sigmoid(outputs), pattern_mask)
+                #loss = nn.
                 # TODO: все ещё не уверен верно ли это, BCEWithLogitsLoss уже несёт в себе функцию активации сигмоиду
 
-            predicts.append(torch.sigmoid(out).detach().cpu().numpy())
+            predicts.append(torch.sigmoid(outputs).detach().cpu().numpy())
             truths.append(pattern_mask.detach().cpu().numpy())
             cum_loss += loss.item() * wafer_map.size(0)
             gc.collect()
 
         predicts = np.concatenate(predicts)
         truths = np.concatenate(truths)
-        mean_dice = dice_channel_torch(predicts, truths, 0.5)
+        mean_dice = dice_channel_torch(predicts, truths, 0.6)
         val_loss = cum_loss / self.val_loader.__len__()
         return val_loss, mean_dice
 
@@ -98,8 +97,8 @@ class TrainModel(object):
             self.optimizer.zero_grad()
 
             with torch.set_grad_enabled(True):
-                out = self.model(wafer_map)
-                loss = nn.BCEWithLogitsLoss()(torch.sigmoid(out), pattern_mask)
+                outputs = self.model(wafer_map)
+                loss = nn.BCEWithLogitsLoss()(torch.sigmoid(outputs), pattern_mask)
 
                 loss.backward()
                 self.optimizer.step()
@@ -110,6 +109,34 @@ class TrainModel(object):
         epoch_loss = cum_loss / self.train_loader.__len__()
         gc.collect()
         return epoch_loss
+
+    def test_step(self):
+        # на данный момент просто для ручной сверки масок изображений
+        self.model.eval()
+        for wafer_map, pattern_mask in tqdm(
+                self.test_loader, total=len(self.test_loader), ascii=True, desc='testing'):
+            wafer_map, pattern_mask = wafer_map.to(device), pattern_mask.to(device)
+
+            fig = plt.figure()
+            columns = 3
+            rows = 1
+            i = 1
+
+            with torch.set_grad_enabled(False):
+                outputs = self.model(wafer_map)
+                # loss = nn.BCEWithLogitsLoss()(torch.sigmoid(outputs), pattern_mask)
+                image_prob = torch.exp(outputs[0, 0, :, :]).detach().cpu()  # plot class0
+                image_prob = np.where(image_prob > 0.6, 1, 0)
+                fig.add_subplot(rows, columns, i, title="Prediction")
+                plt.imshow(image_prob)
+                i += 1
+                fig.add_subplot(rows, columns, i, title="Wafer Map")
+                plt.imshow(torch.exp(wafer_map[0, 0, :, :]).detach().cpu())
+                i += 1
+                fig.add_subplot(rows, columns, i, title="Truth")
+                plt.imshow(torch.exp(pattern_mask[0, 0, :, :]).detach().cpu())
+                i += 1
+        plt.show()
 
     def logger_step(self, cur_epoch, losses_train, losses_val, mean_dice):
         print(f"[Epoch {cur_epoch}] training loss={losses_train:.6f};  val_loss={losses_val:.6f}; "
@@ -156,7 +183,7 @@ class TrainModel(object):
                     'optimizer': self.optimizer.state_dict(),
                     }
                 torch.save(states, args.save_weight + args.weight_name + str(num_snapshot) + '.pth')
-
+        self.test_step()
         return True
 
     def read_dataframe_in_torch(self, path_to_file):
@@ -187,32 +214,33 @@ class TrainModel(object):
         return pd_database
 
     def load_data(self):
-        '''
-        Загружает данные в обучающую и валидационную выборки
-        '''
-        path_to_file = "input/synthesis/test_database.pkl"
+        path_to_file = (os.path.join("input/synthesis/", args.synth_name))
         # database_pd = self.read_dataframe_in_torch(path_to_file)  # TODO: починить, если понадобится загрузка реальных
         database_pd = pd.read_pickle(path_to_file)
         data_set = WaferDataset(list(database_pd.wafer_map.values), mask_list=list(database_pd.pattern_mask.values))
 
-        validation_split = .1
         shuffle_dataset = True
         random_seed = 42
         dataset_size = len(data_set)
         indices = list(range(dataset_size))
-        split = int(np.floor(validation_split * dataset_size))
+        first_split = int(np.floor(args.validation_split * dataset_size))
+        second_split = int(np.float(args.test_split * dataset_size))
         if shuffle_dataset:
             np.random.seed(random_seed)
             np.random.shuffle(indices)
-        train_indices, val_indices = indices[split:], indices[:split]
+        train_indices, val_indices, test_indices = \
+            indices[first_split+second_split:], indices[:first_split], indices[first_split:first_split+second_split]
 
         train_sampler = SubsetRandomSampler(train_indices)
         valid_sampler = SubsetRandomSampler(val_indices)
+        test_sampler = SubsetRandomSampler(test_indices)
 
         self.train_loader = torch.utils.data.DataLoader(data_set, sampler=train_sampler, batch_size=args.batch_size,
                                                         shuffle=False)
         self.val_loader = torch.utils.data.DataLoader(data_set, sampler=valid_sampler, batch_size=args.batch_size,
                                                       shuffle=False)
+        self.test_loader = torch.utils.data.DataLoader(data_set, sampler=test_sampler, batch_size=args.batch_size,
+                                                       shuffle=False)
 
         return True
 
@@ -226,17 +254,18 @@ class TrainModel(object):
 
         # Setup optimizer
         self.optimizer = torch.optim.Adam(self.model.parameters())
-        self.lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, patience=args.patience)
+        self.lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer,
+                                                                       patience=args.patience)
         self.training()
         return True
 
 
 parser = argparse.ArgumentParser(description='')
-parser.add_argument('--model', default='resnet34', type=str, help='Model version')
+parser.add_argument('--model', default='resnet152', type=str, help='Model version')
 parser.add_argument('--fine_size', default=96, type=int, help='Resized image size')
 parser.add_argument('--pad_left', default=0, type=int, help='Left padding size')
 parser.add_argument('--pad_right', default=0, type=int, help='Right padding size')
-parser.add_argument('--batch_size', default=64, type=int, help='Batch size for training')
+parser.add_argument('--batch_size', default=16, type=int, help='Batch size for training')
 parser.add_argument('--epoch', default=50, type=int, help='Number of training epochs')
 parser.add_argument('--snapshot', default=2, type=int, help='Number of snapshots per fold')
 parser.add_argument('--cuda', default=True, type=bool, help='Use cuda to train model')
@@ -246,9 +275,11 @@ parser.add_argument('--min_lr', default=1e-5, type=float, help='min learning rat
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum for SGD')
 parser.add_argument('--weight_decay', default=1e-3, type=float, help='Weight decay for SGD')
 parser.add_argument('--patience', default=40, type=int, help='Number of epoch waiting for best score')
+parser.add_argument('--validation_split', default=.1, type=float, help='Part of dataset reserved for validation')
+parser.add_argument('--test_split', default=.1, type=float, help='Part of dataset reserved for testing')
 
-parser.add_argument('--synth_name', default='test_database.csv', type=str, help='Synthesized path name')
-parser.add_argument('--real_name', default='_', type=str, help='Real wafers path name')
+parser.add_argument('--synth_name', default='test_database_256.pkl', type=str, help='Synthesized path name')
+parser.add_argument('--real_name', default=None, type=str, help='Real wafers path name')
 parser.add_argument('--each_rate', default=120, type=float, help='Rate of real data')
 parser.add_argument('--center_rate', default=0.1, type=float, help='Center rate of real data')
 parser.add_argument('--donut_rate', default=0.1, type=float, help='Center rate of real data')
