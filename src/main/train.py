@@ -48,7 +48,8 @@ class TrainModel(object):
     def __init__(self):
         self.start_time = time.strftime("%d.%m.%Y_%H.%M", time.localtime())
         # os.mkdir("src/main/logs/" + self.start_time)
-        self.logger = Logger(os.path.join("src/main/logs/", self.start_time))
+        self.logger = Logger(os.path.join("src/main/logs/",
+                                          args.synth_name[:-4] + '_' + args.model + '_' + self.start_time))
 
         # model
         self.model = None
@@ -261,12 +262,12 @@ class TrainModel(object):
 
 
 parser = argparse.ArgumentParser(description='')
-parser.add_argument('--model', default='resnet152', type=str, help='Model version')
+parser.add_argument('--model', default='se_resnext50_32x4d', type=str, help='Model version')
 parser.add_argument('--fine_size', default=96, type=int, help='Resized image size')
 parser.add_argument('--pad_left', default=0, type=int, help='Left padding size')
 parser.add_argument('--pad_right', default=0, type=int, help='Right padding size')
-parser.add_argument('--batch_size', default=16, type=int, help='Batch size for training')
-parser.add_argument('--epoch', default=50, type=int, help='Number of training epochs')
+parser.add_argument('--batch_size', default=4, type=int, help='Batch size for training')
+parser.add_argument('--epoch', default=25, type=int, help='Number of training epochs')
 parser.add_argument('--snapshot', default=2, type=int, help='Number of snapshots per fold')
 parser.add_argument('--cuda', default=True, type=bool, help='Use cuda to train model')
 parser.add_argument('--save_weight', default='output/weights/', type=str, help='weight save space')
@@ -278,7 +279,7 @@ parser.add_argument('--patience', default=40, type=int, help='Number of epoch wa
 parser.add_argument('--validation_split', default=.1, type=float, help='Part of dataset reserved for validation')
 parser.add_argument('--test_split', default=.1, type=float, help='Part of dataset reserved for testing')
 
-parser.add_argument('--synth_name', default='test_database_256.pkl', type=str, help='Synthesized path name')
+parser.add_argument('--synth_name', default='test_database_512.pkl', type=str, help='Synthesized path name')
 parser.add_argument('--real_name', default=None, type=str, help='Real wafers path name')
 parser.add_argument('--each_rate', default=120, type=float, help='Rate of real data')
 parser.add_argument('--center_rate', default=0.1, type=float, help='Center rate of real data')
