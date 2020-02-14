@@ -27,35 +27,36 @@ def synthesis_scratch(wafer_count):
     total_wafer_count = wafer_count * 3
 
     generator = ScratchGenerator()  # генератор паттерна
+    generator.wafer_dims = (512, 512)  # размеры пластин
     noise = NoiseGenerator()  # генератор шума
     synthesis_base = []  # общая выборка
     """ Конфигурация """
     for _ in tqdm(range(wafer_count), ascii=True, total=total_wafer_count,
                   desc='line_weight=1, lam=1.7'):
-        wafer_map, pattern_mask = generator(line_weight=1, is_noise=True, lam_poisson=1.7)
-        wafer_map, pattern_mask = noise(wafer_map, pattern_mask)
-        synthesis_base.append([wafer_map, pattern_mask])
+        wafer_m, pattern_m = generator(line_weight=1, is_noise=True, lam_poisson=1.7)
+        wafer_m, pattern_m = noise(wafer_m, pattern_m)
+        synthesis_base.append([wafer_m, pattern_m])
 
     """ Конфигурация """
     for _ in tqdm(range(wafer_count), ascii=True, total=total_wafer_count/2,
                   desc='line_weight=2, lam=2.1'):
-        wafer_map, pattern_mask = generator(line_weight=2, is_noise=True, lam_poisson=2.1)
-        wafer_map, pattern_mask = noise(wafer_map, pattern_mask)
-        synthesis_base.append([wafer_map, pattern_mask])
+        wafer_m, pattern_m = generator(line_weight=2, is_noise=True, lam_poisson=2.1)
+        wafer_m, pattern_m = noise(wafer_m, pattern_m)
+        synthesis_base.append([wafer_m, pattern_m])
 
     """ Конфигурация """
     for _ in tqdm(range(wafer_count), ascii=True, total=total_wafer_count/3,
                   desc='line_weight=3, lam=0.7'):
-        wafer_map, pattern_mask = generator(line_weight=3, is_noise=True, lam_poisson=0.7)
-        wafer_map, pattern_mask = noise(wafer_map, pattern_mask)
-        synthesis_base.append([wafer_map, pattern_mask])
+        wafer_m, pattern_m = generator(line_weight=3, is_noise=True, lam_poisson=0.7)
+        wafer_m, pattern_m = noise(wafer_m, pattern_m)
+        synthesis_base.append([wafer_m, pattern_m])
 
     # преобразовать list в pandas.DataFrame
     database = pd.DataFrame(synthesis_base, columns=['wafer_map', 'pattern_mask'])
     # сохранить базу данных в формат csv
     if not os.path.isdir('../../input/synthesis/'):
         os.mkdir('../../input/synthesis/')
-    database.to_pickle('../../input/synthesis/test_database.pkl', compression=None)
+    database.to_pickle('../../input/synthesis/test_database_' + str(generator.wafer_dims[0]) + '.pkl', compression=None)
 
     return database
 
