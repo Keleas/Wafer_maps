@@ -535,29 +535,44 @@ class RingGenerator(BasisGenerator):
 
 
 class ClusterGenerator(BasisGenerator):
-    """ Класс для добавления паттернов "Cluster", "Grid", "Fingerprints" на пластину"""
+    """ Класс для добавления паттернов "Cluster", "Grid" на пластину"""
     def __init__(self):
         super(ClusterGenerator, self).__init__()
 
     def __call__(self, wafer=None, pattern_mask_array=None, cluster_origin_point=None, cluster_bounding_box=None,
-                 density=None, number_of_cluster_centers=None):
-        # TODO: закончить комментарии после завершения генератора
-        # мб заменить sklearn просто Гауссовским распределениями и т.п.
+                 density=None, number_of_cluster_centers=None, size_factor=None):
+        """
+        Сгенерировать паттерн "Cluster" на заданной пластине при помощи изотропного Гауссовского распределения
+        :param wafer: np.ndarray: пластина для нанесения паттерна
+        :param pattern_mask_array: np.ndarray: маска дефекта
+        :param cluster_origin_point: int, int: центр кластера
+        :param cluster_bounding_box: int, int: границы размещения центров кластера
+        :param density: int: плотность дефектов (количество точек, возможно накладывающихся)
+        :param number_of_cluster_centers: int: количество центров кластера
+        :param size_factor: float: множитель размеров
+        :return: wafer, pattern_mask_array: np.ndarray, np.ndarray: пластина с паттерном и маска патттерна
+        """
+        # TODO: мб заменить sklearn просто Гауссовским распределениями и т.п.
+
+        # если пластина не задана, применить паттерн к пустому шаблону
         if wafer is None:
             wafer = deepcopy(create_zero_template_map(self.wafer_dims))
 
+        if size_factor is None:
+            size_factor = 1.0
+
         if density is None:
-            density = self.wafer_dims[0] * 3
+            density = int((size_factor ** 2) * self.wafer_dims[0] ** 2 / 20)
 
         if cluster_origin_point is None:
             cluster_origin_point = np.random.randint(int(0.45 * self.wafer_dims[0]), int(0.55 * self.wafer_dims[0]))
 
         if cluster_bounding_box is None:
-            bounding = np.random.randint(self.wafer_dims[0] * 0.05, self.wafer_dims[0] * 0.1)
+            bounding = np.random.randint(size_factor * self.wafer_dims[0] * 0.05, size_factor * self.wafer_dims[0] * 0.1)
             cluster_bounding_box = (-bounding, bounding)
 
         if number_of_cluster_centers is None:
-            number_of_cluster_centers = 10
+            number_of_cluster_centers = 5 * int(size_factor * self.wafer_dims[0] * 0.1)
 
         # формируем кластеры в ограниченной зоне
         cluster_coords, _ = make_blobs(n_samples=density, centers=number_of_cluster_centers, n_features=2,
@@ -579,10 +594,6 @@ class ClusterGenerator(BasisGenerator):
         pattern_mask_array = self.mask_stacking(pattern_mask_array, pattern_mask)
 
         return wafer, pattern_mask_array
-
-
-
-
 
 
 class CurvedScratchGenerator(BasisGenerator):
@@ -875,8 +886,7 @@ if __name__ == '__main__':
             # wafer_map, pattern = scratch_generator(
             #     wafer_map, pattern, line_weight=1, is_noise=True, lam_poisson=1.7)
             # wafer_map, pattern = curved_scratch_generator(wafer_map, pattern, is_noise=True, lam_poisson=1.0)
-            wafer_map, pattern = cluster_generator(wafer_map, pattern, cluster_origin_point=(46, 46),
-                                                   cluster_bounding_box=(-10, 10))
+            wafer_map, pattern = cluster_generator(wafer_map, pattern)
             # wafer_map, pattern = ring_generator(wafer_map, pattern, pattern_type="Donut")
             # wafer_map, pattern = loc_generator(wafer_map, pattern, shape="Rectangle",
             #                            lam_poisson=0.5)
