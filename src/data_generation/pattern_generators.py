@@ -535,7 +535,7 @@ class RingGenerator(BasisGenerator):
 
 
 class ClusterGenerator(BasisGenerator):
-    """ Класс для добавления паттернов "Cluster", "Grid" на пластину"""
+    """ Класс для добавления паттернов "Cluster" на пластину"""
     def __init__(self):
         super(ClusterGenerator, self).__init__()
 
@@ -568,7 +568,8 @@ class ClusterGenerator(BasisGenerator):
             cluster_origin_point = np.random.randint(int(0.45 * self.wafer_dims[0]), int(0.55 * self.wafer_dims[0]))
 
         if cluster_bounding_box is None:
-            bounding = np.random.randint(size_factor * self.wafer_dims[0] * 0.05, size_factor * self.wafer_dims[0] * 0.1)
+            bounding = np.random.randint(
+                size_factor * self.wafer_dims[0] * 0.05, size_factor * self.wafer_dims[0] * 0.1)
             cluster_bounding_box = (-bounding, bounding)
 
         if number_of_cluster_centers is None:
@@ -576,7 +577,7 @@ class ClusterGenerator(BasisGenerator):
 
         # формируем кластеры в ограниченной зоне
         cluster_coords, _ = make_blobs(n_samples=density, centers=number_of_cluster_centers, n_features=2,
-                                       center_box=cluster_bounding_box)
+                                       center_box=cluster_bounding_box, cluster_std=size_factor)
 
         cluster_coords += cluster_origin_point  # смещаем в соответствии с указанным центром
 
@@ -585,7 +586,10 @@ class ClusterGenerator(BasisGenerator):
         pattern_mask = np.zeros(wafer.shape)  # шаблон для маски
 
         for _x, _y in cluster_coords:
-            pattern_mask[_x, _y] = wafer[_x, _y]  # заполняем маску по координатам кластера
+            try:
+                pattern_mask[_x, _y] = wafer[_x, _y]  # заполняем маску по координатам кластера
+            except IndexError:
+                continue
 
         # построение маски паттерна только там, где присутствует сама пластина
         pattern_mask = np.where(pattern_mask == self.wafer_color, self.pattern_color, pattern_mask)
@@ -597,7 +601,7 @@ class ClusterGenerator(BasisGenerator):
 
 
 class CurvedScratchGenerator(BasisGenerator):
-    """ Класс для добавления паттерна "Curved Scratch" на пластину"""
+    """Класс для добавления паттерна "Curved Scratch" на пластину"""
 
     def __init__(self):
         super(CurvedScratchGenerator, self).__init__()
