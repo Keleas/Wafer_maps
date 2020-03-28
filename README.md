@@ -1,6 +1,6 @@
 # Classification of Wafer Maps Defect Based on Deep Learning Methods With Small Amount of Data
 
-IEEE 6th International Conference Engineering & Telecommunication – En&T-2019 (_Forthcoming_)
+[IEEE 6th International Conference Engineering & Telecommunication – En&T-2019](https://ieeexplore.ieee.org/document/9030550)
 
 ## Introduction: The Purpose of the Research
 
